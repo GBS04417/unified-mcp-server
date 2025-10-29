@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Unified MCP Server
 
 A comprehensive Model Context Protocol (MCP) server that provides seamless integration with **JIRA**, **Confluence**, and **Microsoft Outlook**. This unified server combines the functionality of multiple specialized MCP servers into a single, easy-to-deploy solution.
@@ -395,3 +396,7 @@ MIT License - See LICENSE file for details
 **Built with ❤️ for enterprise productivity and automation**
 
 *A single MCP server to rule them all - JIRA, Confluence, and Outlook integration made simple!*
+=======
+# Unified_MCP_Server
+this mcp server connects to Jira, confluence and outlook (currently personal outlook email) and performs actions
+>>>>>>> 2f737a2e472785fe5f60d32f6ab8b89dd6bb4380
