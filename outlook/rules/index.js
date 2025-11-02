@@ -1,119 +1,177 @@
 /**
- * Rules tools for Outlook integration
+ * Email rules management module for Outlook MCP server
  */
-
 const { GraphService } = require('../services/graph-service');
+const { ensureAuthenticated } = require('../auth/index');
+const handleListRules = require('./list');
+const handleCreateRule = require('./create');
 
-const graphService = new GraphService();
+// Import getInboxRules for the edit sequence tool
+const { getInboxRules } = require('./list');
 
-async function handleListRules(args) {
-  try {
-    const rules = await graphService.listRules();
-    
+/**
+ * Edit rule sequence handler
+ * @param {object} args - Tool arguments
+ * @returns {object} - MCP response
+ */
+async function handleEditRuleSequence(args) {
+  const { ruleName, sequence } = args;
+
+  if (!ruleName) {
     return {
       content: [{
         type: "text",
-        text: JSON.stringify({
-          totalRules: rules.length,
-          rules: rules.map(rule => ({
-            id: rule.id,
-            displayName: rule.displayName,
-            isEnabled: rule.isEnabled,
-            conditions: rule.conditions,
-            actions: rule.actions
-          }))
-        }, null, 2)
+        text: "Rule name is required. Please specify the exact name of an existing rule."
+      }]
+    };
+  }
+
+  if (!sequence || isNaN(sequence) || sequence < 1) {
+    return {
+      content: [{
+        type: "text",
+        text: "A positive sequence number is required. Lower numbers run first (higher priority)."
+      }]
+    };
+  }
+
+  try {
+    // Get access token
+    const accessToken = await ensureAuthenticated();
+
+    // Get all rules
+    const rules = await getInboxRules(accessToken);
+
+    // Find the rule by name
+    const rule = rules.find(r => r.displayName === ruleName);
+    if (!rule) {
+      return {
+        content: [{
+          type: "text",
+          text: `Rule with name "${ruleName}" not found.`
+        }]
+      };
+    }
+
+    // Update the rule sequence
+    const updateResult = await callGraphAPI(
+      accessToken,
+      'PATCH',
+      `me/mailFolders/inbox/messageRules/${rule.id}`,
+      {
+        sequence: sequence
+      }
+    );
+
+    return {
+      content: [{
+        type: "text",
+        text: `Successfully updated the sequence of rule "${ruleName}" to ${sequence}.`
       }]
     };
   } catch (error) {
+    if (error.message === 'Authentication required') {
+      return {
+        content: [{
+          type: "text",
+          text: "Authentication required. Please use the 'authenticate' tool first."
+        }]
+      };
+    }
+
     return {
       content: [{
         type: "text",
-        text: `Error listing rules: ${error.message}`
+        text: `Error updating rule sequence: ${error.message}`
       }]
     };
   }
 }
 
-async function handleCreateRule(args) {
-  const { name, conditions, actions, enabled = true } = args;
-
-  if (!name || !conditions || !actions) {
-    throw new Error('Name, conditions, and actions are required');
-  }
-
-  try {
-    const ruleData = {
-      displayName: name,
-      isEnabled: enabled,
-      conditions,
-      actions
-    };
-
-    const rule = await graphService.createRule(ruleData);
-    
-    return {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          success: true,
-          message: 'Rule created successfully',
-          ruleId: rule.id,
-          displayName: rule.displayName
-        }, null, 2)
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: "text",
-        text: `Error creating rule: ${error.message}`
-      }]
-    };
-  }
-}
-
+// Rules management tool definitions
 const rulesTools = [
   {
-    name: 'outlook_list_rules',
-    description: 'List all mail rules',
+    name: "list-rules",
+    description: "Lists inbox rules in your Outlook account",
     inputSchema: {
-      type: 'object',
-      properties: {},
-      additionalProperties: false
+      type: "object",
+      properties: {
+        includeDetails: {
+          type: "boolean",
+          description: "Include detailed rule conditions and actions"
+        }
+      },
+      required: []
     },
     handler: handleListRules
   },
-
   {
-    name: 'outlook_create_rule',
-    description: 'Create a new mail rule',
+    name: "create-rule",
+    description: "Creates a new inbox rule",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         name: {
-          type: 'string',
-          description: 'Display name for the rule'
+          type: "string",
+          description: "Name of the rule to create"
         },
-        conditions: {
-          type: 'object',
-          description: 'Rule conditions (Graph API format)'
+        fromAddresses: {
+          type: "string",
+          description: "Comma-separated list of sender email addresses for the rule"
         },
-        actions: {
-          type: 'object',
-          description: 'Rule actions (Graph API format)'
+        containsSubject: {
+          type: "string",
+          description: "Subject text the email must contain"
         },
-        enabled: {
-          type: 'boolean',
-          description: 'Whether the rule is enabled',
-          default: true
+        hasAttachments: {
+          type: "boolean",
+          description: "Whether the rule applies to emails with attachments"
+        },
+        moveToFolder: {
+          type: "string",
+          description: "Name of the folder to move matching emails to"
+        },
+        markAsRead: {
+          type: "boolean",
+          description: "Whether to mark matching emails as read"
+        },
+        isEnabled: {
+          type: "boolean",
+          description: "Whether the rule should be enabled after creation (default: true)"
+        },
+        sequence: {
+          type: "number",
+          description: "Order in which the rule is executed (lower numbers run first, default: 100)"
         }
       },
-      required: ['name', 'conditions', 'actions'],
-      additionalProperties: false
+      required: ["name"]
     },
     handler: handleCreateRule
+  },
+  {
+    name: "edit-rule-sequence",
+    description: "Changes the execution order of an existing inbox rule",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ruleName: {
+          type: "string",
+          description: "Name of the rule to modify"
+        },
+        sequence: {
+          type: "number",
+          description: "New sequence value for the rule (lower numbers run first)"
+        }
+      },
+      required: ["ruleName", "sequence"]
+    },
+    handler: handleEditRuleSequence
   }
 ];
 
-module.exports = { rulesTools };
+module.exports = {
+  rulesTools,
+  handleListRules,
+  handleCreateRule,
+  handleEditRuleSequence
+};

@@ -11,12 +11,12 @@ require('dotenv').config();
 
 // Log to console
 console.log('Starting Outlook Authentication Server');
-
+// ...existing code...
 // Authentication configuration
 const AUTH_CONFIG = {
-  clientId: process.env.MS_CLIENT_ID || '', // Set your client ID as an environment variable
-  clientSecret: process.env.MS_CLIENT_SECRET || '', // Set your client secret as an environment variable
-  redirectUri: process.env.AZURE_REDIRECT_URI || 'http://localhost:3000/auth/callback',
+  clientId: process.env.MS_CLIENT_ID || process.env.AZURE_CLIENT_ID || '', // Try both env var names
+  clientSecret: process.env.MS_CLIENT_SECRET || process.env.AZURE_CLIENT_SECRET || '', // Try both env var names
+  redirectUri: process.env.AZURE_REDIRECT_URI || 'http://localhost:3000/auth/callbackToken',
   scopes: [
     'offline_access',
     'User.Read',
@@ -27,19 +27,26 @@ const AUTH_CONFIG = {
     'Calendars.ReadWrite',
     'Contacts.Read'
   ],
-  tokenStorePath: path.join(process.cwd(), '.outlook-tokens.json')
+  tokenStorePath: path.join(process.cwd(), '.outlook-tokens.json'),
+  authEndpoint: 'https://login.microsoftonline.com/consumers/oauth2/v2.0',
 };
 
 // Create HTTP server
 const server = http.createServer((req, res) => {
   const parsedUrl = url.parse(req.url, true);
   const pathname = parsedUrl.pathname;
-  
+
   console.log(`Request received: ${pathname}`);
-  
-  if (pathname === '/auth/callback') {
+  console.log('Query parameters:', parsedUrl.query);
+  console.log('Current configuration:', {
+    clientId: AUTH_CONFIG.clientId ? 'Set' : 'Not set',
+    clientSecret: AUTH_CONFIG.clientSecret ? 'Set' : 'Not set',
+    redirectUri: AUTH_CONFIG.redirectUri
+  });
+
+  if (pathname === '/auth/callback' || pathname === '/auth/callbackToken') {
     const query = parsedUrl.query;
-    
+
     if (query.error) {
       console.error(`Authentication error: ${query.error} - ${query.error_description}`);
       res.writeHead(400, { 'Content-Type': 'text/html' });
@@ -65,14 +72,17 @@ const server = http.createServer((req, res) => {
       `);
       return;
     }
-    
+
     if (query.code) {
       console.log('Authorization code received, exchanging for tokens...');
-      
+      console.log('Using code:', query.code.substring(0, 10) + '...');
+
       // Exchange code for tokens
       exchangeCodeForTokens(query.code)
         .then((tokens) => {
           console.log('Token exchange successful');
+          console.log('Access token received:', tokens.access_token ? 'Yes' : 'No');
+          console.log('Refresh token received:', tokens.refresh_token ? 'Yes' : 'No');
           res.writeHead(200, { 'Content-Type': 'text/html' });
           res.end(`
             <html>
@@ -144,7 +154,7 @@ const server = http.createServer((req, res) => {
   } else if (pathname === '/auth') {
     // Handle the /auth route - redirect to Microsoft's OAuth authorization endpoint
     console.log('Auth request received, redirecting to Microsoft login...');
-    
+
     // Verify credentials are set
     if (!AUTH_CONFIG.clientId || !AUTH_CONFIG.clientSecret) {
       res.writeHead(500, { 'Content-Type': 'text/html' });
@@ -173,11 +183,11 @@ const server = http.createServer((req, res) => {
       `);
       return;
     }
-    
+
     // Get client_id from query parameters or use the default
     const query = parsedUrl.query;
     const clientId = query.client_id || AUTH_CONFIG.clientId;
-    
+
     // Build the authorization URL
     const authParams = {
       client_id: clientId,
@@ -185,12 +195,14 @@ const server = http.createServer((req, res) => {
       redirect_uri: AUTH_CONFIG.redirectUri,
       scope: AUTH_CONFIG.scopes.join(' '),
       response_mode: 'query',
-      state: Date.now().toString() // Simple state parameter for security
+      state: Date.now().toString(), // Simple state parameter for security
+      prompt: 'select_account'
     };
-    
-    const authUrl = `https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?${querystring.stringify(authParams)}`;
+
+    const authUrl = `${AUTH_CONFIG.authEndpoint}/authorize?${querystring.stringify(authParams)}`;
     console.log(`Redirecting to: ${authUrl}`);
-    
+    console.log('Auth params:', authParams);
+
     // Redirect to Microsoft's login page
     res.writeHead(302, { 'Location': authUrl });
     res.end();
@@ -236,7 +248,15 @@ function exchangeCodeForTokens(code) {
       grant_type: 'authorization_code',
       scope: AUTH_CONFIG.scopes.join(' ')
     });
-    
+
+    // Log token request details
+    console.log('Token request details:', {
+      endpoint: `${AUTH_CONFIG.authEndpoint}/token`,
+      code_length: code.length,
+      redirect_uri: AUTH_CONFIG.redirectUri,
+      scopes: AUTH_CONFIG.scopes.join(' ')
+    });
+
     const options = {
       hostname: 'login.microsoftonline.com',
       path: '/consumers/oauth2/v2.0/token',
@@ -246,29 +266,29 @@ function exchangeCodeForTokens(code) {
         'Content-Length': Buffer.byteLength(postData)
       }
     };
-    
+
     const req = https.request(options, (res) => {
       let data = '';
-      
+
       res.on('data', (chunk) => {
         data += chunk;
       });
-      
+
       res.on('end', () => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           try {
             const tokenResponse = JSON.parse(data);
-            
+
             // Calculate expiration time (current time + expires_in seconds)
             const expiresAt = Date.now() + (tokenResponse.expires_in * 1000);
-            
+
             // Add expires_at for easier expiration checking
             tokenResponse.expires_at = expiresAt;
-            
+
             // Save tokens to file
             fs.writeFileSync(AUTH_CONFIG.tokenStorePath, JSON.stringify(tokenResponse, null, 2), 'utf8');
             console.log(`Tokens saved to ${AUTH_CONFIG.tokenStorePath}`);
-            
+
             resolve(tokenResponse);
           } catch (error) {
             reject(new Error(`Error parsing token response: ${error.message}`));
@@ -278,11 +298,11 @@ function exchangeCodeForTokens(code) {
         }
       });
     });
-    
+
     req.on('error', (error) => {
       reject(error);
     });
-    
+
     req.write(postData);
     req.end();
   });
@@ -290,16 +310,34 @@ function exchangeCodeForTokens(code) {
 
 // Start server
 const PORT = process.env.AUTH_SERVER_PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Authentication server running at http://localhost:${PORT}`);
-  console.log(`Waiting for authentication callback at ${AUTH_CONFIG.redirectUri}`);
-  console.log(`Token will be stored at: ${AUTH_CONFIG.tokenStorePath}`);
-  
-  if (!AUTH_CONFIG.clientId || !AUTH_CONFIG.clientSecret) {
-    console.log('\n⚠️  WARNING: Microsoft Graph API credentials are not set.');
-    console.log('   Please set the MS_CLIENT_ID and MS_CLIENT_SECRET environment variables.');
+
+// Handle server errors
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`❌ Error: Port ${PORT} is already in use.`);
+    console.error('   Please stop any other servers or choose a different port.');
+  } else {
+    console.error('❌ Server error:', error);
   }
+  process.exit(1);
 });
+
+// Try to start the server
+try {
+  server.listen(PORT, () => {
+    console.log(`\n🚀 Authentication server running at http://localhost:${PORT}`);
+    console.log(`📡 Waiting for authentication callback at ${AUTH_CONFIG.redirectUri}`);
+    console.log(`💾 Token will be stored at: ${AUTH_CONFIG.tokenStorePath}`);
+
+    if (!AUTH_CONFIG.clientId || !AUTH_CONFIG.clientSecret) {
+      console.log('\n⚠️  WARNING: Microsoft Graph API credentials are not set.');
+      console.log('   Please set the MS_CLIENT_ID and MS_CLIENT_SECRET environment variables.');
+    }
+  });
+} catch (error) {
+  console.error('❌ Failed to start server:', error);
+  process.exit(1);
+}
 
 // Handle termination
 process.on('SIGINT', () => {

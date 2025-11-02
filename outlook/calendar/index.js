@@ -1,149 +1,189 @@
 /**
- * Calendar tools for Outlook integration
+ * Calendar module for Outlook MCP server
  */
+const handleListEvents = require('./list');
+const handleDeclineEvent = require('./decline');
+const handleCreateEvent = require('./create');
+const handleCancelEvent = require('./cancel');
+const handleDeleteEvent = require('./delete');
 
-const { GraphService } = require('../services/graph-service');
-
-const graphService = new GraphService();
-
-async function handleListEvents(args) {
-  const { maxResults = 10, startDate, endDate } = args;
-
-  try {
-    const events = await graphService.listEvents(maxResults, startDate, endDate);
-    
-    return {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          totalEvents: events.length,
-          events: events.map(event => ({
-            id: event.id,
-            subject: event.subject,
-            start: event.start,
-            end: event.end,
-            location: event.location?.displayName,
-            attendees: event.attendees?.map(a => a.emailAddress?.address) || []
-          }))
-        }, null, 2)
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: "text",
-        text: `Error listing events: ${error.message}`
-      }]
-    };
-  }
-}
-
-async function handleCreateEvent(args) {
-  const { title, startDateTime, endDateTime, attendees, location, body, timeZone } = args;
-
-  if (!title || !startDateTime || !endDateTime) {
-    throw new Error('Title, start date/time, and end date/time are required');
-  }
-
-  try {
-    const event = await graphService.createEvent({
-      title,
-      startDateTime,
-      endDateTime,
-      attendees,
-      location,
-      body,
-      timeZone
-    });
-    
-    return {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          success: true,
-          message: 'Event created successfully',
-          eventId: event.id,
-          subject: event.subject
-        }, null, 2)
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: "text",
-        text: `Error creating event: ${error.message}`
-      }]
-    };
-  }
-}
-
+// Calendar tool definitions
 const calendarTools = [
   {
-    name: 'outlook_list_events',
-    description: 'List calendar events with optional date filtering',
+    name: "list-events",
+    description: "Lists upcoming events from your calendar",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        maxResults: {
-          type: 'number',
-          description: 'Maximum number of events to return',
-          default: 10
-        },
-        startDate: {
-          type: 'string',
-          description: 'Start date in ISO format (optional)'
-        },
-        endDate: {
-          type: 'string',
-          description: 'End date in ISO format (optional)'
+        count: {
+          type: "number",
+          description: "Number of events to retrieve (default: 10, max: 50)"
         }
       },
-      additionalProperties: false
+      required: []
     },
     handler: handleListEvents
   },
-
   {
-    name: 'outlook_create_event',
-    description: 'Create a new calendar event',
+    name: "decline-event",
+    description: "Declines a calendar event. You can either provide eventId directly, or use eventSubject to search for and select the event",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        title: {
-          type: 'string',
-          description: 'Event title/subject'
+        eventId: {
+          type: "string",
+          description: "The ID of the event to decline (optional if using eventSubject)"
         },
-        startDateTime: {
-          type: 'string',
-          description: 'Start date and time in ISO format'
+        eventSubject: {
+          type: "string",
+          description: "The subject/title of the event to decline (optional if using eventId)"
         },
-        endDateTime: {
-          type: 'string',
-          description: 'End date and time in ISO format'
+        comment: {
+          type: "string",
+          description: "Optional comment for declining the event"
         },
-        attendees: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Array of attendee email addresses'
-        },
-        location: {
-          type: 'string',
-          description: 'Event location'
-        },
-        body: {
-          type: 'string',
-          description: 'Event description/body'
-        },
-        timeZone: {
-          type: 'string',
-          description: 'Time zone (default: UTC)'
+        maxResults: {
+          type: "number",
+          description: "Maximum number of upcoming events to search through (default: 50)",
+          default: 50
         }
       },
-      required: ['title', 'startDateTime', 'endDateTime'],
-      additionalProperties: false
+      required: []
+    },
+    handler: handleDeclineEvent
+  },
+  {
+    name: "create-event",
+    description: "Creates a new calendar event and automatically sends invitations to attendees",
+    inputSchema: {
+      type: "object",
+      properties: {
+        subject: {
+          type: "string",
+          description: "The subject of the event"
+        },
+        start: {
+          type: "string",
+          description: "The start time of the event in ISO 8601 format (e.g., '2025-10-27T14:00:00')"
+        },
+        end: {
+          type: "string",
+          description: "The end time of the event in ISO 8601 format (e.g., '2025-10-27T15:00:00')"
+        },
+        attendees: {
+          type: "array",
+          items: {
+            oneOf: [
+              {
+                type: "string",
+                description: "Email address of attendee"
+              },
+              {
+                type: "object",
+                properties: {
+                  email: { type: "string", description: "Email address" },
+                  name: { type: "string", description: "Display name" },
+                  type: { type: "string", enum: ["required", "optional"], description: "Attendee type" }
+                },
+                required: ["email"]
+              }
+            ]
+          },
+          description: "List of attendees (email addresses or objects with email, name, and type)"
+        },
+        body: {
+          type: "string",
+          description: "Optional body content for the event"
+        },
+        location: {
+          type: "string",
+          description: "Optional location for the event"
+        },
+        sendInvitations: {
+          type: "boolean",
+          description: "Whether to send invitations to attendees (default: true)",
+          default: true
+        },
+        isOnlineMeeting: {
+          type: "boolean",
+          description: "Whether to create as an online meeting (default: false)",
+          default: false
+        },
+        importance: {
+          type: "string",
+          enum: ["low", "normal", "high"],
+          description: "Importance level of the event (default: normal)",
+          default: "normal"
+        }
+      },
+      required: ["subject", "start", "end"]
     },
     handler: handleCreateEvent
+  },
+  {
+    name: "cancel-event",
+    description: "Cancels a calendar event and sends cancellation notifications to attendees. You can either provide eventId directly, or use eventSubject to search for and select the event",
+    inputSchema: {
+      type: "object",
+      properties: {
+        eventId: {
+          type: "string",
+          description: "The ID of the event to cancel (optional if using eventSubject)"
+        },
+        eventSubject: {
+          type: "string",
+          description: "The subject/title of the event to cancel (optional if using eventId)"
+        },
+        comment: {
+          type: "string",
+          description: "Optional comment explaining the cancellation reason"
+        },
+        sendNotifications: {
+          type: "boolean",
+          description: "Whether to send cancellation notifications to attendees (default: true)",
+          default: true
+        },
+        maxResults: {
+          type: "number",
+          description: "Maximum number of upcoming events to search through (default: 50)",
+          default: 50
+        }
+      },
+      required: []
+    },
+    handler: handleCancelEvent
+  },
+  {
+    name: "delete-event",
+    description: "Deletes a calendar event. You can either provide eventId directly, or use eventSubject to search for and select the event",
+    inputSchema: {
+      type: "object",
+      properties: {
+        eventId: {
+          type: "string",
+          description: "The ID of the event to delete (optional if using eventSubject)"
+        },
+        eventSubject: {
+          type: "string",
+          description: "The subject/title of the event to delete (optional if using eventId)"
+        },
+        maxResults: {
+          type: "number",
+          description: "Maximum number of upcoming events to search through (default: 50)",
+          default: 50
+        }
+      },
+      required: []
+    },
+    handler: handleDeleteEvent
   }
 ];
 
-module.exports = { calendarTools };
+module.exports = {
+  calendarTools,
+  handleListEvents,
+  handleDeclineEvent,
+  handleCreateEvent,
+  handleCancelEvent,
+  handleDeleteEvent
+};

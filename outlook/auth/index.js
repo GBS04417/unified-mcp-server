@@ -112,6 +112,21 @@ async function handleRefreshTokens() {
   }
 }
 
+/**
+ * Ensure user is authenticated
+ * @returns {string} - Access token
+ * @throws {Error} - If authentication is required
+ */
+async function ensureAuthenticated() {
+  // Check if we have valid tokens
+  if (tokenManager.hasValidTokens()) {
+    return tokenManager.getAccessToken();
+  }
+  
+  // Throw error if not authenticated
+  throw new Error('Authentication required');
+}
+
 // Define authentication tools
 const authTools = [
   {
@@ -164,4 +179,4 @@ const authTools = [
   }
 ];
 
-module.exports = { authTools };
+module.exports = { authTools, ensureAuthenticated, tokenManager };

@@ -1,378 +1,252 @@
 /**
- * Email tools for Outlook integration
- * Provides email management functionality through Microsoft Graph API
+ * Email module for Outlook MCP server
  */
+const handleListEmails = require('./list');
+const handleSearchEmails = require('./search');
+const handleReadEmail = require('./read');
+const handleSendEmail = require('./send');
+const handleMarkAsRead = require('./mark-as-read');
+const handleMoveEmail = require('./move');
+const handleReplyEmail = require('./reply');
 
-const { GraphService } = require('../services/graph-service');
-
-// Initialize Graph service
-const graphService = new GraphService();
-
-/**
- * List emails with filtering options
- */
-async function handleListEmails(args) {
-  const {
-    folder = 'inbox',
-    maxResults = 10,
-    filter,
-    search,
-    unreadOnly = false
-  } = args;
-
-  try {
-    const emails = await graphService.listEmails(folder, maxResults, filter, search, unreadOnly);
-    
-    return {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          folder,
-          totalEmails: emails.length,
-          emails: emails.map(email => ({
-            id: email.id,
-            subject: email.subject,
-            from: email.from?.emailAddress?.address,
-            receivedDateTime: email.receivedDateTime,
-            isRead: email.isRead,
-            importance: email.importance,
-            hasAttachments: email.hasAttachments
-          }))
-        }, null, 2)
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: "text",
-        text: `Error listing emails: ${error.message}`
-      }]
-    };
-  }
-}
-
-/**
- * Read a specific email
- */
-async function handleReadEmail(args) {
-  const { emailId } = args;
-  
-  if (!emailId) {
-    throw new Error('Email ID is required');
-  }
-
-  try {
-    const email = await graphService.getEmail(emailId);
-    
-    return {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          id: email.id,
-          subject: email.subject,
-          from: email.from,
-          to: email.toRecipients,
-          cc: email.ccRecipients,
-          bcc: email.bccRecipients,
-          receivedDateTime: email.receivedDateTime,
-          sentDateTime: email.sentDateTime,
-          importance: email.importance,
-          isRead: email.isRead,
-          hasAttachments: email.hasAttachments,
-          body: {
-            contentType: email.body?.contentType,
-            content: email.body?.content
-          },
-          attachments: email.attachments?.map(att => ({
-            id: att.id,
-            name: att.name,
-            size: att.size,
-            contentType: att.contentType
-          })) || []
-        }, null, 2)
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: "text",
-        text: `Error reading email: ${error.message}`
-      }]
-    };
-  }
-}
-
-/**
- * Send an email
- */
-async function handleSendEmail(args) {
-  const {
-    to,
-    subject,
-    body,
-    cc,
-    bcc,
-    importance = 'normal',
-    attachments
-  } = args;
-
-  if (!to || !subject || !body) {
-    throw new Error('To, subject, and body are required fields');
-  }
-
-  try {
-    const result = await graphService.sendEmail({
-      to,
-      subject,
-      body,
-      cc,
-      bcc,
-      importance,
-      attachments
-    });
-    
-    return {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          success: true,
-          message: 'Email sent successfully',
-          messageId: result.id
-        }, null, 2)
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: "text",
-        text: `Error sending email: ${error.message}`
-      }]
-    };
-  }
-}
-
-/**
- * Mark email as read/unread
- */
-async function handleMarkAsRead(args) {
-  const { emailId, isRead = true } = args;
-  
-  if (!emailId) {
-    throw new Error('Email ID is required');
-  }
-
-  try {
-    await graphService.updateEmail(emailId, { isRead });
-    
-    return {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          success: true,
-          message: `Email marked as ${isRead ? 'read' : 'unread'}`,
-          emailId
-        }, null, 2)
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: "text",
-        text: `Error updating email: ${error.message}`
-      }]
-    };
-  }
-}
-
-/**
- * Search emails
- */
-async function handleSearchEmails(args) {
-  const {
-    query,
-    folder = 'inbox',
-    maxResults = 25
-  } = args;
-
-  if (!query) {
-    throw new Error('Search query is required');
-  }
-
-  try {
-    const results = await graphService.searchEmails(query, folder, maxResults);
-    
-    return {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          query,
-          folder,
-          totalResults: results.length,
-          results: results.map(email => ({
-            id: email.id,
-            subject: email.subject,
-            from: email.from?.emailAddress?.address,
-            receivedDateTime: email.receivedDateTime,
-            snippet: email.bodyPreview,
-            isRead: email.isRead
-          }))
-        }, null, 2)
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: "text",
-        text: `Error searching emails: ${error.message}`
-      }]
-    };
-  }
-}
-
-// Define email tools
+// Email tool definitions
 const emailTools = [
   {
-    name: 'outlook_list_emails',
-    description: 'List emails from a specific folder with filtering options',
+    name: "list-emails",
+    description: "Lists recent emails from your inbox",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         folder: {
-          type: 'string',
-          description: 'Email folder name (e.g., inbox, sent, drafts)',
-          default: 'inbox'
+          type: "string",
+          description: "Email folder to list (e.g., 'inbox', 'sent', 'drafts', default: 'inbox')"
         },
-        maxResults: {
-          type: 'number',
-          description: 'Maximum number of emails to return',
-          default: 10
-        },
-        filter: {
-          type: 'string',
-          description: 'OData filter expression'
-        },
-        search: {
-          type: 'string',
-          description: 'Search query'
-        },
-        unreadOnly: {
-          type: 'boolean',
-          description: 'Only return unread emails',
-          default: false
+        count: {
+          type: "number",
+          description: "Number of emails to retrieve (default: 10, max: 50)"
         }
       },
-      additionalProperties: false
+      required: []
     },
     handler: handleListEmails
   },
-
   {
-    name: 'outlook_read_email',
-    description: 'Read a specific email by ID',
+    name: "search-emails",
+    description: "Search for emails using various criteria",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        emailId: {
-          type: 'string',
-          description: 'The ID of the email to read'
+        query: {
+          type: "string",
+          description: "Search query text to find in emails"
+        },
+        folder: {
+          type: "string",
+          description: "Email folder to search in (default: 'inbox')"
+        },
+        from: {
+          type: "string",
+          description: "Filter by sender email address or name"
+        },
+        to: {
+          type: "string",
+          description: "Filter by recipient email address or name"
+        },
+        subject: {
+          type: "string",
+          description: "Filter by email subject"
+        },
+        hasAttachments: {
+          type: "boolean",
+          description: "Filter to only emails with attachments"
+        },
+        unreadOnly: {
+          type: "boolean",
+          description: "Filter to only unread emails"
+        },
+        count: {
+          type: "number",
+          description: "Number of results to return (default: 10, max: 50)"
         }
       },
-      required: ['emailId'],
-      additionalProperties: false
+      required: []
+    },
+    handler: handleSearchEmails
+  },
+  {
+    name: "read-email",
+    description: "Reads the content of a specific email",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: {
+          type: "string",
+          description: "ID of the email to read"
+        }
+      },
+      required: ["id"]
     },
     handler: handleReadEmail
   },
-
   {
-    name: 'outlook_send_email',
-    description: 'Send a new email',
+    name: "send-email",
+    description: "Composes and sends a new email",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         to: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Array of recipient email addresses'
-        },
-        subject: {
-          type: 'string',
-          description: 'Email subject'
-        },
-        body: {
-          type: 'string',
-          description: 'Email body content'
+          type: "string",
+          description: "Comma-separated list of recipient email addresses"
         },
         cc: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Array of CC recipient email addresses'
+          type: "string",
+          description: "Comma-separated list of CC recipient email addresses"
         },
         bcc: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Array of BCC recipient email addresses'
+          type: "string",
+          description: "Comma-separated list of BCC recipient email addresses"
+        },
+        subject: {
+          type: "string",
+          description: "Email subject"
+        },
+        body: {
+          type: "string",
+          description: "Email body content (can be plain text or HTML)"
         },
         importance: {
-          type: 'string',
-          enum: ['low', 'normal', 'high'],
-          description: 'Email importance level',
-          default: 'normal'
+          type: "string",
+          description: "Email importance (normal, high, low)",
+          enum: ["normal", "high", "low"]
+        },
+        saveToSentItems: {
+          type: "boolean",
+          description: "Whether to save the email to sent items"
         }
       },
-      required: ['to', 'subject', 'body'],
-      additionalProperties: false
+      required: ["to", "subject", "body"]
     },
     handler: handleSendEmail
   },
-
   {
-    name: 'outlook_mark_as_read',
-    description: 'Mark an email as read or unread',
+    name: "mark-as-read",
+    description: "Marks an email as read or unread",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        emailId: {
-          type: 'string',
-          description: 'The ID of the email to update'
+        id: {
+          type: "string",
+          description: "ID of the email to mark as read/unread"
         },
         isRead: {
-          type: 'boolean',
-          description: 'Whether to mark as read (true) or unread (false)',
-          default: true
+          type: "boolean",
+          description: "Whether to mark as read (true) or unread (false). Default: true"
         }
       },
-      required: ['emailId'],
-      additionalProperties: false
+      required: ["id"]
     },
     handler: handleMarkAsRead
   },
-
   {
-    name: 'outlook_search_emails',
-    description: 'Search for emails using a query string',
+    name: "move-email",
+    description: "Moves one or more emails matching criteria to a different folder. You can provide specific email IDs or search criteria (from, subject, query).",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
+        emailIds: {
+          type: "string",
+          description: "Optional: Comma-separated list of specific email IDs to move"
+        },
+        from: {
+          type: "string",
+          description: "Optional: Move emails from this sender (email address or name)"
+        },
+        subject: {
+          type: "string",
+          description: "Optional: Move emails containing this text in the subject"
+        },
         query: {
-          type: 'string',
-          description: 'Search query string'
+          type: "string",
+          description: "Optional: Move emails matching this search query"
         },
-        folder: {
-          type: 'string',
-          description: 'Folder to search in (default: inbox)',
-          default: 'inbox'
+        sourceFolder: {
+          type: "string",
+          description: "Optional: Name of the source folder (default: 'inbox', use exact folder name)"
         },
-        maxResults: {
-          type: 'number',
-          description: 'Maximum number of results to return',
-          default: 25
+        destinationFolder: {
+          type: "string",
+          description: "Name of the destination folder (use exact folder name)"
+        },
+        maxEmails: {
+          type: "number",
+          description: "Maximum number of emails to move when using search criteria (default: 50, max: 500)"
         }
       },
-      required: ['query'],
-      additionalProperties: false
+      required: ["destinationFolder"]
     },
-    handler: handleSearchEmails
+    handler: handleMoveEmail
+  },
+  {
+    name: "reply-email",
+    description: "Reply to an email message. First use without 'body' to search and display matching emails, then call again with 'body' to compose your reply.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        from: {
+          type: "string",
+          description: "Filter by sender email address or name (used to find which email to reply to)"
+        },
+        subject: {
+          type: "string",
+          description: "Filter by email subject text (used to find which email to reply to)"
+        },
+        query: {
+          type: "string",
+          description: "General search query to find the email to reply to"
+        },
+        folder: {
+          type: "string",
+          description: "Email folder to search in (default: 'inbox')"
+        },
+        body: {
+          type: "string",
+          description: "Your reply message body. When provided with search criteria (from/subject/query), will compose and send/draft the reply. Leave empty to search for emails."
+        },
+        cc: {
+          type: "string",
+          description: "Comma-separated list of CC recipient email addresses"
+        },
+        bcc: {
+          type: "string",
+          description: "Comma-separated list of BCC recipient email addresses"
+        },
+        importance: {
+          type: "string",
+          description: "Email importance (normal, high, low)",
+          enum: ["normal", "high", "low"]
+        },
+        includeOriginalMessage: {
+          type: "boolean",
+          description: "Whether to include the original message in the reply (default: false)"
+        },
+        saveToSentItems: {
+          type: "boolean",
+          description: "Whether to send the reply immediately (true) or save as draft (false). Default: true"
+        }
+      },
+      required: ["from", "subject", "query"]
+    },
+    handler: handleReplyEmail
   }
 ];
 
-module.exports = { emailTools };
+module.exports = {
+  emailTools,
+  handleListEmails,
+  handleSearchEmails,
+  handleReadEmail,
+  handleSendEmail,
+  handleMarkAsRead,
+  handleMoveEmail,
+  handleReplyEmail
+};

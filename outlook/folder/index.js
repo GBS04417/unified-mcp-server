@@ -1,154 +1,74 @@
 /**
- * Folder tools for Outlook integration
+ * Folder management module for Outlook MCP server
  */
+const handleListFolders = require('./list');
+const handleCreateFolder = require('./create');
+const { handleMoveFolder } = require('./move');
 
-const { GraphService } = require('../services/graph-service');
-
-const graphService = new GraphService();
-
-async function handleListFolders(args) {
-  try {
-    const folders = await graphService.listFolders();
-    
-    return {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          totalFolders: folders.length,
-          folders: folders.map(folder => ({
-            id: folder.id,
-            displayName: folder.displayName,
-            totalItemCount: folder.totalItemCount,
-            unreadItemCount: folder.unreadItemCount
-          }))
-        }, null, 2)
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: "text",
-        text: `Error listing folders: ${error.message}`
-      }]
-    };
-  }
-}
-
-async function handleCreateFolder(args) {
-  const { name, parentFolderId } = args;
-
-  if (!name) {
-    throw new Error('Folder name is required');
-  }
-
-  try {
-    const folder = await graphService.createFolder(name, parentFolderId);
-    
-    return {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          success: true,
-          message: 'Folder created successfully',
-          folderId: folder.id,
-          displayName: folder.displayName
-        }, null, 2)
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: "text",
-        text: `Error creating folder: ${error.message}`
-      }]
-    };
-  }
-}
-
-async function handleMoveEmail(args) {
-  const { emailId, destinationFolderId } = args;
-
-  if (!emailId || !destinationFolderId) {
-    throw new Error('Email ID and destination folder ID are required');
-  }
-
-  try {
-    await graphService.moveEmail(emailId, destinationFolderId);
-    
-    return {
-      content: [{
-        type: "text",
-        text: JSON.stringify({
-          success: true,
-          message: 'Email moved successfully',
-          emailId,
-          destinationFolderId
-        }, null, 2)
-      }]
-    };
-  } catch (error) {
-    return {
-      content: [{
-        type: "text",
-        text: `Error moving email: ${error.message}`
-      }]
-    };
-  }
-}
-
+// Folder management tool definitions
 const folderTools = [
   {
-    name: 'outlook_list_folders',
-    description: 'List all mail folders',
+    name: "list-folders",
+    description: "Lists mail folders in your Outlook account",
     inputSchema: {
-      type: 'object',
-      properties: {},
-      additionalProperties: false
+      type: "object",
+      properties: {
+        includeItemCounts: {
+          type: "boolean",
+          description: "Include counts of total and unread items"
+        },
+        includeChildren: {
+          type: "boolean",
+          description: "Include child folders in hierarchy"
+        }
+      },
+      required: []
     },
     handler: handleListFolders
   },
-
   {
-    name: 'outlook_create_folder',
-    description: 'Create a new mail folder',
+    name: "create-folder",
+    description: "Creates a new mail folder",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
         name: {
-          type: 'string',
-          description: 'Name of the new folder'
+          type: "string",
+          description: "Name of the folder to create"
         },
-        parentFolderId: {
-          type: 'string',
-          description: 'ID of parent folder (optional, creates at root level if not specified)'
+        parentFolder: {
+          type: "string",
+          description: "Optional parent folder name (default is root)"
         }
       },
-      required: ['name'],
-      additionalProperties: false
+      required: ["name"]
     },
     handler: handleCreateFolder
   },
-
   {
-    name: 'outlook_move_email',
-    description: 'Move an email to a different folder',
+    name: "move-folder",
+    description: "Sends a move request for a folder to another folder. Note: Due to Outlook's folder hierarchy constraints, the folder may not change visual position in your mailbox, similar to Outlook UI behavior.",
     inputSchema: {
-      type: 'object',
+      type: "object",
       properties: {
-        emailId: {
-          type: 'string',
-          description: 'ID of the email to move'
+        sourceFolder: {
+          type: "string",
+          description: "Name of the SOURCE folder you want to move (use exact folder name)"
         },
-        destinationFolderId: {
-          type: 'string',
-          description: 'ID of the destination folder'
+        targetFolder: {
+          type: "string",
+          description: "Name of the TARGET folder where you want to move it to (use exact folder name). Can be any folder."
         }
       },
-      required: ['emailId', 'destinationFolderId'],
-      additionalProperties: false
+      required: ["sourceFolder", "targetFolder"]
     },
-    handler: handleMoveEmail
+    handler: handleMoveFolder
   }
 ];
 
-module.exports = { folderTools };
+module.exports = {
+  folderTools,
+  handleListFolders,
+  handleCreateFolder,
+  handleMoveFolder
+};
