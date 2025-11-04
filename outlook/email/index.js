@@ -75,16 +75,28 @@ const emailTools = [
   },
   {
     name: "read-email",
-    description: "Reads the content of a specific email",
+    description: "Reads the content of a specific email. Requires the email's unique ID (not the email address). Get the ID from list-emails or search-emails tools.",
     inputSchema: {
       type: "object",
       properties: {
         id: {
           type: "string",
-          description: "ID of the email to read"
+          description: "Unique ID of the email to read (e.g., from list-emails output). NOT the email address."
+        },
+        from: {
+          type: "string",
+          description: "Optional: Search for email from this sender and read the first match (alternative to using ID)"
+        },
+        subject: {
+          type: "string",
+          description: "Optional: Search for email with this subject and read the first match (alternative to using ID)"
+        },
+        query: {
+          type: "string",
+          description: "Optional: Search for email containing this text and read the first match (alternative to using ID)"
         }
       },
-      required: ["id"]
+      required: []
     },
     handler: handleReadEmail
   },
@@ -153,6 +165,10 @@ const emailTools = [
     inputSchema: {
       type: "object",
       properties: {
+        id: {
+          type: "string",
+          description: "Optional: Single email ID to move (can also use emailIds)"
+        },
         emailIds: {
           type: "string",
           description: "Optional: Comma-separated list of specific email IDs to move"
@@ -167,15 +183,15 @@ const emailTools = [
         },
         query: {
           type: "string",
-          description: "Optional: Move emails matching this search query"
+          description: "Optional: Move emails matching this search query (searches across subject, body, etc.)"
         },
         sourceFolder: {
           type: "string",
-          description: "Optional: Name of the source folder (default: 'inbox', use exact folder name)"
+          description: "Optional: Name of the source folder (default: 'inbox', case-insensitive)"
         },
         destinationFolder: {
           type: "string",
-          description: "Name of the destination folder (use exact folder name)"
+          description: "Name of the destination folder (case-insensitive)"
         },
         maxEmails: {
           type: "number",

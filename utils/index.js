@@ -148,7 +148,7 @@ class TextProcessor {
    */
   static htmlToText(html) {
     if (!html || typeof html !== 'string') return '';
-    
+
     return html
       // Remove script and style elements
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
@@ -188,15 +188,15 @@ class TextProcessor {
    */
   static generateSummary(text, maxLength = 500) {
     if (!text || text.length <= maxLength) return text;
-    
+
     // Try to cut at sentence boundary
     const truncated = text.substring(0, maxLength);
     const lastPeriod = truncated.lastIndexOf('.');
-    
+
     if (lastPeriod > maxLength * 0.8) {
       return truncated.substring(0, lastPeriod + 1);
     }
-    
+
     return truncated + '...';
   }
 
@@ -205,10 +205,10 @@ class TextProcessor {
    */
   static extractKeyPoints(text) {
     const points = [];
-    
+
     // Look for bullet points, numbered lists, or important sentences
     const lines = text.split(/[.!?]\s+/);
-    
+
     for (const line of lines) {
       if (line.length > 20 && line.length < 200) {
         // Check if it contains important keywords
@@ -217,7 +217,7 @@ class TextProcessor {
         }
       }
     }
-    
+
     return points.slice(0, 5); // Return top 5 points
   }
 
@@ -227,27 +227,27 @@ class TextProcessor {
   static identifyBusinessContext(text) {
     const contexts = [];
     const lowerText = text.toLowerCase();
-    
+
     // Banking/Financial keywords
     if (/\b(payment|banking|financial|transaction|credit|debit|loan|account)\b/.test(lowerText)) {
       contexts.push('Financial Services');
     }
-    
+
     // Technical/Development keywords
     if (/\b(api|development|code|software|system|technical|implementation)\b/.test(lowerText)) {
       contexts.push('Technical/Development');
     }
-    
+
     // Process/Workflow keywords
     if (/\b(process|workflow|procedure|step|requirement|specification)\b/.test(lowerText)) {
       contexts.push('Business Process');
     }
-    
+
     // Project Management keywords
     if (/\b(project|milestone|deliverable|timeline|resource|planning)\b/.test(lowerText)) {
       contexts.push('Project Management');
     }
-    
+
     return contexts;
   }
 
@@ -260,13 +260,17 @@ class TextProcessor {
       'process', 'procedure', 'step', 'action', 'decision', 'result',
       'issue', 'problem', 'solution', 'implementation', 'development'
     ];
-    
+
     const lowerText = text.toLowerCase();
     return importantWords.some(word => lowerText.includes(word));
   }
 }
 
+// Import priority tools
+const priorityTools = require('./priority-tools');
+
 module.exports = {
   HttpClient,
-  TextProcessor
+  TextProcessor,
+  priorityTools
 };

@@ -4,6 +4,16 @@ A comprehensive Model Context Protocol (MCP) server that provides seamless integ
 
 ## 🌟 Features
 
+### 🧠 AI-Powered Priority System ⭐ **LATEST UPDATE!**
+- **🎯 Smart Priority Scoring**: Advanced AI algorithms analyze tasks across JIRA, Confluence, and Outlook with 0-100 scoring
+- **📊 Intelligent Workload Analysis**: Real-time capacity indicators (OPTIMAL/MODERATE/HIGH/OVERLOADED) with personalized recommendations  
+- **🔗 Multi-Source Data Aggregation**: Unified dashboard combining JIRA tasks, Confluence pages, and Outlook emails with 15-minute intelligent caching
+- **🚨 Dynamic Urgency Levels**: Color-coded priority system (🔴 URGENT 80-100, 🟠 HIGH 60-79, 🟡 MEDIUM 40-59, 🟢 LOW 20-39)
+- **🤖 AI Keyword Detection**: Automatically detects urgency indicators like "ASAP", "critical", "deadline", "urgent"
+- **📈 Comprehensive Analytics**: Replaces traditional static reports with dynamic, AI-powered priority insights
+- **⚡ Quick Commands**: `npm run smart-daily`, `npm run full-priority`, `npm run dashboard`, `npm run workload-analysis`
+- **🎨 Dashboard Integration**: Chart-ready data with urgency badges, capacity indicators, and visual analytics
+
 ### 🎫 JIRA Integration (15+ Tools)
 - **Issue Management**: Fetch, analyze, create, and update JIRA tickets
 - **Workflow Automation**: Transition issues, batch operations
@@ -142,7 +152,57 @@ eply-email - Reply to emails (interactive two-mode: search then reply)
 - outlook_list_rules - List mail automation rules
 - outlook_create_rule - Create mail automation rules
 
-## 🎯 Recent Enhancements (v1.1.0)
+### 🧠 Priority System Tools
+
+#### Core Priority Analysis
+- **priority.generate_priority_report** - Generate comprehensive AI-powered priority analysis across all sources
+- **priority.get_urgent_items** - Get filtered view of urgent and high-priority items only
+- **priority.dashboard_data** - Retrieve dashboard-ready data with charts and visualizations
+- **priority.workload_analysis** - Analyze current workload capacity and get recommendations
+
+#### Quick Access NPM Scripts
+```bash
+# Daily priority check (urgent/high items only)
+npm run smart-daily
+
+# Complete priority analysis with all items
+npm run full-priority  
+
+# Dashboard data for UI integration
+npm run dashboard
+
+# Workload capacity analysis
+npm run workload-analysis
+
+# Backward compatibility aliases
+npm run urgent-items    # → smart-daily
+npm run full-report     # → full-priority  
+npm run daily-check     # → smart-daily
+```
+
+#### Architecture Components
+- **DataFetcher**: Multi-source parallel data collection with intelligent caching
+- **ScoringEngine**: AI algorithms for priority scoring with configurable weights  
+- **DataAggregator**: Combines data sources and generates comprehensive analytics
+- **15-minute Caching**: Performance optimization with graceful degradation
+
+## 🎯 Latest Updates (v1.2.0) ⭐ NEW!
+
+### 🧠 AI-Powered Priority System
+- **Complete Architecture**: Modular design with DataFetcher, ScoringEngine, and DataAggregator
+- **Smart Scoring Algorithms**: Configurable weighted scoring for JIRA (priority, overdue, dependencies), Confluence (activity, mentions, tags), Outlook (importance, flags, response time)
+- **Intelligent Caching**: 15-minute cache with performance optimization and error recovery
+- **Dashboard Integration**: Chart-ready data with urgency badges, capacity indicators, visual analytics
+- **Workload Analysis**: Real-time capacity assessment with personalized recommendations
+- **Backward Compatibility**: Old comprehensive report commands redirected to priority system
+
+### 🧹 Codebase Optimization  
+- **Removed Legacy Code**: Eliminated comprehensive-report.js (~700 lines) in favor of advanced priority system
+- **Streamlined Tools**: Consolidated reporting tools into unified priority system
+- **Enhanced NPM Scripts**: Updated package.json with direct priority system calls
+- **Documentation Updates**: Complete README refresh with latest features and usage
+
+## 🎯 Previous Enhancements (v1.1.0)
 
 ### Email Reply Tool
 - **Interactive two-mode operation**:
@@ -167,6 +227,72 @@ eply-email - Reply to emails (interactive two-mode: search then reply)
 **Note**: Due to Microsoft Outlook's folder hierarchy constraints, folder move requests may succeed (matching Outlook UI behavior) but may not change the visual position of folders in your mailbox. This is an Outlook API design limitation, not a tool issue. The tool correctly sends move requests, but Outlook's internal hierarchy prevents custom folder moves between locations. The move operation will show as successful to match Outlook UI behavior.
 
 ## 💡 Usage Examples
+
+### 🧠 Priority System (Comprehensive Reporting)
+
+**Quick Daily Check:**
+```bash
+npm run smart-daily
+```
+
+**Complete Priority Analysis:**
+```bash
+npm run full-priority
+```
+
+**Generate Custom Priority Report:**
+```javascript
+{
+  "name": "priority.generate_priority_report",
+  "arguments": {
+    "focusUser": "Your Name"
+  }
+}
+```
+
+**Get Dashboard Data:**
+```bash
+npm run dashboard
+```
+
+**Workload Analysis:**
+```bash
+npm run workload-analysis
+```
+
+**Custom Priority Report with Focus User:**
+```javascript
+{
+  "name": "priority.generate_priority_report",
+  "arguments": {
+    "focusUser": "Your Name"
+  }
+}
+```
+
+> **💡 Pro Tip**: The AI-Powered Priority System is the **recommended approach** for comprehensive reporting. It replaces traditional static reports with intelligent, dynamic analysis that learns from your work patterns across JIRA, Confluence, and Outlook.
+
+### 🚀 **Quick Start with Priority System**
+
+1. **Daily Priority Check** (recommended for morning routine):
+   ```bash
+   npm run smart-daily
+   ```
+
+2. **Complete Analysis** (for planning sessions):
+   ```bash
+   npm run full-priority
+   ```
+
+3. **Dashboard Integration** (for UI/reporting tools):
+   ```bash
+   npm run dashboard
+   ```
+
+4. **Workload Assessment** (for capacity planning):
+   ```bash
+   npm run workload-analysis
+   ```
 
 ### Email Operations
 
@@ -340,9 +466,41 @@ USE_TEST_MODE=true node index.js
 - USE_TEST_MODE=true - Enable mock data for testing
 
 ### Test Specific Service
-`ash
+```bash
 DISABLE_JIRA=true DISABLE_CONFLUENCE=true node index.js
-`
+```
+
+## 🔧 Priority System Troubleshooting
+
+### Common Issues & Solutions
+
+**🚨 "Priority system initialization failed"**
+```bash
+# Check if all services are running
+node run-tool.js outlook.outlook_about
+node run-tool.js jira.jira_get_editable_fields  
+node run-tool.js confluence.confluence_search --query "test"
+```
+
+**📊 "No urgent items found" but tasks exist**
+- Priority scoring may be working correctly - items below HIGH threshold (60/100)
+- Use `npm run full-priority` to see all items with scores
+- Check if assignee name matches exactly in JIRA
+
+**⚡ Performance issues with large datasets**
+- Priority system uses 15-minute caching automatically
+- For immediate refresh: restart the server
+- Outlook parsing issues are handled gracefully (won't block JIRA/Confluence)
+
+**🎯 Customizing Priority Weights**
+```javascript
+// Edit priority-system/scoring-engine.js
+this.weights = {
+  jira: { priority: 0.3, overdue: 0.25, dependencies: 0.15 },
+  confluence: { recentActivity: 0.4, mentions: 0.3 },
+  outlook: { senderImportance: 0.25, flagged: 0.2 }
+};
+```
 
 ## 📁 Project Structure
 
@@ -428,7 +586,18 @@ MIT License - See LICENSE file for details
 
 ## 🆕 Version History
 
-### v1.1.0
+### v1.2.0 ⭐ **LATEST** - AI-Powered Priority System
+- **🧠 Advanced Priority System**: Complete AI-powered priority analysis with 0-100 scoring algorithms
+- **🎯 Multi-Source Intelligence**: Unified view of JIRA tasks, Confluence pages, and Outlook emails with smart aggregation  
+- **📊 Workload Analytics**: Real-time capacity analysis (OPTIMAL/MODERATE/HIGH/OVERLOADED) with personalized recommendations
+- **🚨 Dynamic Urgency Detection**: 4-level urgency system with AI keyword analysis and color-coded dashboard
+- **⚡ Performance Optimization**: 15-minute intelligent caching with parallel data processing and error recovery
+- **🎨 Dashboard Integration**: Chart-ready data with urgency badges, visual indicators, and analytics
+- **🧹 Codebase Cleanup**: Removed legacy comprehensive-report.js (~700 lines) in favor of advanced priority system
+- **📝 Enhanced Documentation**: Complete README update with latest features, usage examples, and migration guides
+- **🔄 Backward Compatibility**: Old report commands automatically redirect to priority system tools
+
+### v1.1.0 - Enhanced Email & Folder Management  
 - **Email Reply Tool**: Interactive two-mode email reply functionality
 - **Enhanced Email Move**: Search-based email filtering and batch operations
 - **Folder Management**: Clear source/target parameter distinction
@@ -437,7 +606,7 @@ MIT License - See LICENSE file for details
 - **Performance**: Optimized folder lookup with $top=500
 - **Removed Deprecated Parameters**: folderName and destinationFolder replaced with sourceFolder/targetFolder
 
-### v1.0.0
+### v1.0.0 - Foundation Release
 - **Initial Release**: Unified JIRA, Confluence, and Outlook integration
 - **25+ Tools**: Comprehensive productivity suite
 - **Test Mode**: Complete mock data support
@@ -446,6 +615,13 @@ MIT License - See LICENSE file for details
 
 ---
 
-**Built for enterprise productivity and automation**
+**Built for enterprise productivity and intelligent automation**
 
-*A single MCP server to rule them all - JIRA, Confluence, and Outlook integration made simple!*
+*The most advanced MCP server with AI-powered priority analysis - JIRA, Confluence, and Outlook integration with intelligent insights!* 
+
+🎯 **Focus on what matters most** with AI-powered priority scoring  
+🤖 **Smart workload analysis** across all your productivity tools  
+⚡ **Instant insights** from unified data aggregation and caching  
+📊 **Dashboard-ready analytics** with visual priority indicators
+
+**Experience the future of productivity automation today!**

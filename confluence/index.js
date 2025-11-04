@@ -147,4 +147,7 @@ const confluenceTools = [
   }
 ];
 
-module.exports = { confluenceTools };
+// Export service instance for priority system
+const confluenceService = new ConfluenceService();
+
+module.exports = { confluenceTools, confluenceService };

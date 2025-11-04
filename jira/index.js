@@ -30,7 +30,7 @@ const jiraTools = [
       return await service.handleFetch(args.issueKey);
     }
   },
-  
+
   {
     name: 'jira_analyze',
     description: 'Analyze JIRA ticket with linked content and provide business insights',
@@ -75,21 +75,21 @@ const jiraTools = [
 
   {
     name: 'jira_fetch_by_assignee',
-    description: 'Fetch all JIRA issues assigned to a specific user with JQL-based filtering',
+    description: 'Enhanced v1.1.0: Fetch JIRA issues assigned to a user with smart filtering. By default shows only active work (Open, Task Assigned, Task In Progress, Task On Hold). Enhanced with detailed issue info including web URLs, due dates, and project details.',
     inputSchema: {
       type: 'object',
       properties: {
         assignee: {
           type: 'string',
-          description: 'Username of the assignee'
+          description: 'Username of the assignee (exact match)'
         },
         status: {
           type: 'string',
-          description: 'Filter by issue status (optional)'
+          description: 'Filter by specific issue status (optional). If not provided, shows only active tasks: Open, Task Assigned, Task In Progress, Task On Hold'
         },
         maxResults: {
           type: 'number',
-          description: 'Maximum number of results (default: 50)'
+          description: 'Maximum number of results to fetch from JIRA (default: 500). Client-side filtering may reduce final count.'
         }
       },
       required: ['assignee']
@@ -368,4 +368,7 @@ const jiraTools = [
   }
 ];
 
-module.exports = { jiraTools };
+// Export service instance for priority system
+const jiraService = new JiraService();
+
+module.exports = { jiraTools, jiraService };

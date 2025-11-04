@@ -25,4 +25,8 @@ const outlookTools = [
   ...rulesTools
 ];
 
-module.exports = { outlookTools };
+// Export service instance for priority system
+const { OutlookService } = require('./service');
+const outlookService = new OutlookService();
+
+module.exports = { outlookTools, outlookService };

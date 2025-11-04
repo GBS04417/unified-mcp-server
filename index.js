@@ -18,9 +18,13 @@ const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio
 const config = require('./config');
 
 // Import all tool modules
-const { jiraTools } = require('./jira');
-const { confluenceTools } = require('./confluence');
-const { outlookTools } = require('./outlook');
+const { jiraTools, jiraService } = require('./jira');
+const { confluenceTools, confluenceService } = require('./confluence');
+const { outlookTools, outlookService } = require('./outlook');
+const PrioritySystemService = require('./priority-system');
+
+// Initialize priority system
+const prioritySystem = new PrioritySystemService();
 
 // Log startup information
 console.error(`🚀 STARTING UNIFIED MCP SERVER v${config.SERVER_VERSION}`);
@@ -46,18 +50,44 @@ if (config.OUTLOOK_ENABLED) {
   console.error(`✅ Outlook: ${outlookTools.length} tools loaded`);
 }
 
+// Add priority system tools (will be initialized on first use)
+const priorityTools = prioritySystem.getTools().map(tool => ({
+  name: `priority_${tool.name}`,
+  description: tool.description,
+  inputSchema: tool.inputSchema,
+  handler: async (args) => {
+    // Lazy initialization on first use
+    if (!prioritySystem.aggregator) {
+      await prioritySystem.initialize(
+        config.JIRA_ENABLED ? jiraService : null,
+        config.CONFLUENCE_ENABLED ? confluenceService : null,
+        config.OUTLOOK_ENABLED ? outlookService : null,
+        {
+          scoring: {
+            // Custom scoring weights can be configured here
+          }
+        }
+      );
+    }
+    return await prioritySystem.handleToolCall(tool.name, args);
+  }
+}));
+
+ALL_TOOLS.push(...priorityTools);
+console.error(`✅ Priority System: ${priorityTools.length} tools loaded`);
+
 console.error(`🔧 Total tools available: ${ALL_TOOLS.length}`);
 
 // Create server instance
 const server = new Server(
   { name: config.SERVER_NAME, version: config.SERVER_VERSION },
-  { 
-    capabilities: { 
+  {
+    capabilities: {
       tools: ALL_TOOLS.reduce((acc, tool) => {
         acc[tool.name] = {};
         return acc;
       }, {})
-    } 
+    }
   }
 );
 
@@ -66,30 +96,30 @@ server.fallbackRequestHandler = async (request) => {
   try {
     const { method, params, id } = request;
     console.error(`📥 REQUEST: ${method} [${id}]`);
-    
+
     // Initialize handler
     if (method === "initialize") {
       console.error(`🔄 INITIALIZE REQUEST: ID [${id}]`);
       return {
         protocolVersion: "2024-11-05",
-        capabilities: { 
+        capabilities: {
           tools: ALL_TOOLS.reduce((acc, tool) => {
             acc[tool.name] = {};
             return acc;
           }, {})
         },
-        serverInfo: { 
-          name: config.SERVER_NAME, 
+        serverInfo: {
+          name: config.SERVER_NAME,
           version: config.SERVER_VERSION,
           description: "Unified MCP server for JIRA, Confluence, and Outlook integration"
         }
       };
     }
-    
+
     // Tools list handler
     if (method === "tools/list") {
       console.error(`📋 TOOLS LIST REQUEST: ID [${id}] - ${ALL_TOOLS.length} tools`);
-      
+
       return {
         tools: ALL_TOOLS.map(tool => ({
           name: tool.name,
@@ -98,30 +128,30 @@ server.fallbackRequestHandler = async (request) => {
         }))
       };
     }
-    
+
     // Empty responses for other capabilities
     if (method === "resources/list") return { resources: [] };
     if (method === "prompts/list") return { prompts: [] };
-    
+
     // Tool call handler
     if (method === "tools/call") {
       try {
         const { name, arguments: args = {} } = params || {};
-        
+
         console.error(`🔧 TOOL CALL: ${name}`);
-        
+
         // Find the tool handler
         const tool = ALL_TOOLS.find(t => t.name === name);
-        
+
         if (tool && tool.handler) {
           const startTime = Date.now();
           const result = await tool.handler(args);
           const duration = Date.now() - startTime;
-          
+
           console.error(`✅ TOOL COMPLETED: ${name} (${duration}ms)`);
           return result;
         }
-        
+
         // Tool not found
         console.error(`❌ TOOL NOT FOUND: ${name}`);
         return {
@@ -140,7 +170,7 @@ server.fallbackRequestHandler = async (request) => {
         };
       }
     }
-    
+
     // Method not found
     return {
       error: {

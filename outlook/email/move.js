@@ -9,18 +9,43 @@ const { GraphService } = require('../services/graph-service');
  * @returns {object} - MCP response
  */
 async function handleMoveEmail(args) {
+    // Debug: Log all received arguments from MCP inspector
+    console.error('🔍 DEBUG: handleMoveEmail called with args:', JSON.stringify(args, null, 2));
+
+    // Helper function to normalize string "null", "undefined", empty strings to actual null
+    const normalizeParam = (value) => {
+        if (value === null || value === undefined || value === 'null' || value === 'undefined' || value === '') {
+            return null;
+        }
+        return value;
+    };
+
     const {
-        emailIds,
-        from,
-        subject,
-        query,
+        id: rawId,
+        emailIds: rawEmailIds,
+        from: rawFrom,
+        subject: rawSubject,
+        query: rawQuery,
         sourceFolder = 'inbox',
         destinationFolder,
         maxEmails = 50
     } = args;
 
+    // Normalize all parameters to handle MCP inspector string "null" values
+    const id = normalizeParam(rawId);
+    const emailIds = normalizeParam(rawEmailIds);
+    const from = normalizeParam(rawFrom);
+    const subject = normalizeParam(rawSubject);
+    const query = normalizeParam(rawQuery);
+
+    // Debug: Log normalized values
+    console.error('🔍 DEBUG: Normalized values:', {
+        id, emailIds, from, subject, query, sourceFolder, destinationFolder, maxEmails
+    });
+
     // Validate required parameters
     if (!destinationFolder) {
+        console.error('❌ ERROR: Destination folder is required');
         return {
             content: [{
                 type: "text",
@@ -29,12 +54,14 @@ async function handleMoveEmail(args) {
         };
     }
 
-    // Check if at least one search criteria is provided
-    if (!emailIds && !from && !subject && !query) {
+    // Support both 'id' and 'emailIds' parameters
+    const emailIdList = id || emailIds;
+    if (!emailIdList && !from && !subject && !query) {
+        console.error('❌ ERROR: No search criteria provided');
         return {
             content: [{
                 type: "text",
-                text: "At least one of the following is required: emailIds, from, subject, or query."
+                text: "At least one of the following is required: id, emailIds, from, subject, or query."
             }]
         };
     }
@@ -43,87 +70,143 @@ async function handleMoveEmail(args) {
         // Initialize GraphService
         const graphService = new GraphService();
 
-        // Resolve source folder ID
-        console.error(`Resolving source folder: '${sourceFolder}'`);
-        const sourceFolderResponse = await graphService.graphRequest(
-            `/me/mailFolders?$filter=displayName eq '${sourceFolder}'&$select=id,displayName`
-        );
+        // Helper function to resolve folder ID with case-insensitive matching
+        const resolveFolderId = async (folderName) => {
+            console.error(`Resolving folder: '${folderName}'`);
 
-        if (!sourceFolderResponse.value || sourceFolderResponse.value.length === 0) {
-            return {
-                content: [{
-                    type: "text",
-                    text: `Source folder '${sourceFolder}' not found.`
-                }]
-            };
-        }
+            // Fetch all folders to do case-insensitive matching
+            let folderResponse = await graphService.graphRequest(
+                `/me/mailFolders?$top=500&$select=id,displayName`
+            );
 
-        const sourceFolderId = sourceFolderResponse.value[0].id;
-        console.error(`Resolved source folder '${sourceFolder}' to ID: ${sourceFolderId}`);
+            if (!folderResponse.value || folderResponse.value.length === 0) {
+                throw new Error(`Could not fetch folders from mailbox`);
+            }
 
-        // Resolve destination folder ID
-        console.error(`Resolving destination folder: '${destinationFolder}'`);
-        const destFolderResponse = await graphService.graphRequest(
-            `/me/mailFolders?$filter=displayName eq '${destinationFolder}'&$select=id,displayName`
-        );
+            // Case-insensitive matching
+            const folder = folderResponse.value.find(f =>
+                f.displayName.toLowerCase() === folderName.toLowerCase()
+            );
 
-        if (!destFolderResponse.value || destFolderResponse.value.length === 0) {
-            return {
-                content: [{
-                    type: "text",
-                    text: `Destination folder '${destinationFolder}' not found.`
-                }]
-            };
-        }
+            if (!folder) {
+                const availableFolders = folderResponse.value.map(f => f.displayName).join(', ');
+                throw new Error(`Folder '${folderName}' not found. Available folders: ${availableFolders}`);
+            }
 
-        const destinationFolderId = destFolderResponse.value[0].id;
-        console.error(`Resolved destination folder '${destinationFolder}' to ID: ${destinationFolderId}`);
+            console.error(`Resolved folder '${folderName}' to ID: ${folder.id}`);
+            return folder.id;
+        };
+
+        // Resolve source and destination folder IDs
+        const sourceFolderId = await resolveFolderId(sourceFolder);
+        const destinationFolderId = await resolveFolderId(destinationFolder);
 
         // Get emails to move
         let emailsToMove = [];
 
-        if (emailIds) {
+        if (emailIdList) {
             // Move specific emails by ID
-            emailsToMove = emailIds.split(',').map(id => ({ id: id.trim() })).filter(e => e.id);
+            const ids = emailIdList.split(',').map(str => str.trim()).filter(str => str);
+            emailsToMove = ids.map(id => ({ id }));
+            console.error(`Moving ${emailsToMove.length} specific email(s) by ID`);
         } else {
             // Search for emails matching criteria
             console.error('Searching for emails matching criteria...');
-            const searchParams = {
-                $top: Math.min(maxEmails, 200),
-                $select: 'id,subject,from,receivedDateTime'
-            };
-
-            // Build filter conditions
-            const filterConditions = [];
-
-            if (subject) {
-                filterConditions.push(`contains(subject, '${subject.replace(/'/g, "''")}')`);
-            }
-            if (from) {
-                filterConditions.push(`contains(from/emailAddress/address, '${from.replace(/'/g, "''")}')`);
-            }
-
-            if (filterConditions.length > 0) {
-                searchParams.$filter = filterConditions.join(' and ');
-            }
-
-            // Use $search for general query (searches subject, body, etc.)
-            if (query) {
-                searchParams.$search = `"${query.replace(/"/g, '\\"')}"`;
-            }
+            console.error(`Search criteria: from='${from}' subject='${subject}' query='${query}'`);
 
             const endpoint = `/me/mailFolders/${sourceFolderId}/messages`;
-            const searchResponse = await graphService.graphRequest(endpoint + '?' + new URLSearchParams(searchParams));
 
-            emailsToMove = searchResponse.value || [];
-            console.error(`Found ${emailsToMove.length} emails matching criteria`);
+            // Always use fallback strategy: fetch large batch and filter client-side
+            // This is more reliable than relying on Graph API search or $filter with bodyPreview
+            const fallbackParams = {
+                $top: Math.min(maxEmails * 2, 500),
+                $select: 'id,subject,from,bodyPreview,receivedDateTime',
+                $orderby: 'receivedDateTime desc'
+            };
+
+            console.error(`Fetching from endpoint: ${endpoint}`);
+
+            try {
+                const fallbackResponse = await graphService.graphRequest(endpoint + '?' + new URLSearchParams(fallbackParams));
+                let allEmails = fallbackResponse.value || [];
+
+                console.error(`Fetched ${allEmails.length} emails from source folder`);
+
+                // Client-side filtering - apply all criteria
+                let filtered = allEmails;
+
+                // Filter by subject
+                if (subject) {
+                    const subjectLower = subject.toLowerCase();
+                    console.error(`Filtering by subject: '${subject}'`);
+                    filtered = filtered.filter(email =>
+                        email.subject && email.subject.toLowerCase().includes(subjectLower)
+                    );
+                    console.error(`After subject filter: ${filtered.length} emails`);
+                }
+
+                // Filter by query (search in subject AND body)
+                if (query) {
+                    const queryLower = query.toLowerCase();
+                    console.error(`🔍 DEBUG: Filtering by query: '${query}' (lowercase: '${queryLower}')`);
+
+                    // Show sample emails before filtering
+                    console.error(`🔍 DEBUG: Sample emails before query filter (first 3):`);
+                    filtered.slice(0, 3).forEach((email, idx) => {
+                        console.error(`  ${idx + 1}. Subject: "${email.subject || 'No subject'}"`);
+                        console.error(`     Body: "${(email.bodyPreview || 'No preview').substring(0, 50)}..."`);
+                    });
+
+                    filtered = filtered.filter(email => {
+                        const subjectMatch = email.subject && email.subject.toLowerCase().includes(queryLower);
+                        const bodyMatch = (email.bodyPreview || '').toLowerCase().includes(queryLower);
+                        const matches = subjectMatch || bodyMatch;
+
+                        if (matches) {
+                            console.error(`  ✅ MATCH: "${email.subject}" (subject: ${subjectMatch}, body: ${bodyMatch})`);
+                        }
+
+                        return matches;
+                    });
+                    console.error(`🔍 DEBUG: After query filter: ${filtered.length} emails`);
+                }
+
+                // Filter by sender
+                if (from) {
+                    const fromLower = from.toLowerCase();
+                    console.error(`Filtering by sender: '${from}'`);
+                    filtered = filtered.filter(email => {
+                        if (email.from && email.from.emailAddress) {
+                            const senderEmail = (email.from.emailAddress.address || '').toLowerCase();
+                            const senderName = (email.from.emailAddress.name || '').toLowerCase();
+                            return senderEmail.includes(fromLower) || senderName.includes(fromLower);
+                        }
+                        return false;
+                    });
+                    console.error(`After sender filter: ${filtered.length} emails`);
+                }
+
+                emailsToMove = filtered.slice(0, maxEmails);
+                console.error(`Final search found ${emailsToMove.length} emails matching all criteria`);
+            } catch (error) {
+                console.error(`Failed to fetch and filter emails: ${error.message}`);
+                throw error;
+            }
         }
 
         if (emailsToMove.length === 0) {
+            console.error('❌ DEBUG: No emails found! Summary:');
+            console.error(`   - Source folder: ${sourceFolder}`);
+            console.error(`   - Destination folder: ${destinationFolder}`);
+            console.error(`   - Query: "${query}"`);
+            console.error(`   - Subject: "${subject}"`);
+            console.error(`   - From: "${from}"`);
+            console.error(`   - Max emails: ${maxEmails}`);
+
             return {
                 content: [{
                     type: "text",
-                    text: "No emails found matching the search criteria."
+                    text: `No emails found matching the search criteria.\n\nDebug info:\n- Source: ${sourceFolder}\n- Query: "${query}"\n- Subject: "${subject}"\n- From: "${from}"\n\nTry using list-emails to see what emails are available in the source folder.`
                 }]
             };
         }

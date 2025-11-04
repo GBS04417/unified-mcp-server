@@ -93,20 +93,65 @@ async function handleCreateEvent(args) {
       console.error('Creating event with attendees - invitations will be sent automatically by Microsoft Graph');
       console.error('Attendees being added:', JSON.stringify(formattedAttendees, null, 2));
 
-      // Ensure the event is created as a meeting (not an appointment)
+      // Ensure the event is created as a meeting (not an appointment) that sends invitations
       eventData.isOrganizer = true;
       eventData.responseRequested = true;
+      eventData.allowNewTimeProposals = true;
+      eventData.showAs = "busy";
+
+      // Add meeting-specific properties
+      eventData.type = "singleInstance";
+      eventData.sensitivity = "normal";
+
+      console.error('📧 Event data being sent:', JSON.stringify(eventData, null, 2));
 
       response = await graphService.graphRequest(endpoint, {
         method: 'POST',
         body: JSON.stringify(eventData)
       });
 
+      console.error('📅 Event creation response:', JSON.stringify(response, null, 2));
+
       // Verify the event was created with attendees
       if (response.attendees && response.attendees.length > 0) {
         console.error('✅ Event created successfully with attendees. Invitations should be sent automatically.');
+
+        // Double-check by retrieving the event to ensure attendees are properly set
+        try {
+          const verifyEvent = await graphService.graphRequest(`/me/events/${response.id}`);
+          console.error(`🔍 Verification: Event has ${verifyEvent.attendees?.length || 0} attendees`);
+
+          if (verifyEvent.attendees?.length > 0) {
+            console.error('✅ Confirmed: Attendees are properly associated with the event');
+
+            // If still no invitations are being sent, try to manually send them
+            // Note: Microsoft Graph should automatically send invitations when creating events with attendees
+            // But some organizations may have different policies
+          } else {
+            console.error('⚠️ Warning: Event verification shows no attendees');
+          }
+        } catch (verifyError) {
+          console.error('⚠️ Could not verify event creation:', verifyError.message);
+        }
+
       } else {
         console.error('⚠️ Event created but no attendees found in response. This may indicate an issue.');
+        console.error('🔧 Attempting to add attendees manually...');
+
+        // Try to update the event with attendees
+        try {
+          const updateData = { attendees: formattedAttendees };
+          await graphService.graphRequest(`/me/events/${response.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(updateData)
+          });
+
+          // Re-fetch the updated event
+          response = await graphService.graphRequest(`/me/events/${response.id}`);
+          console.error('✅ Successfully added attendees via update');
+        } catch (updateError) {
+          console.error('❌ Failed to add attendees via update:', updateError.message);
+        }
       }
 
     } else if (formattedAttendees.length > 0 && !eventSendInvitations) {
@@ -119,7 +164,7 @@ async function handleCreateEvent(args) {
 
       response = await graphService.graphRequest(endpoint, {
         method: 'POST',
-        data: eventWithoutAttendees
+        body: JSON.stringify(eventWithoutAttendees)
       });
 
       // Update event to add attendees (this typically doesn't send notifications for existing events)

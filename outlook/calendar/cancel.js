@@ -33,7 +33,7 @@ async function getUpcomingEvents(maxResults = 50) {
  * @returns {object} - MCP response
  */
 async function handleCancelEvent(args) {
-  const { eventId, eventSubject, comment, sendNotifications = true, maxResults = 50 } = args;
+  const { eventId, eventSubject, startDate, comment, sendNotifications = true, maxResults = 50 } = args;
 
   try {
     let actualEventId = eventId;
@@ -52,9 +52,31 @@ async function handleCancelEvent(args) {
       }
 
       // Find event by subject (exact case-insensitive match)
-      const matchingEvents = events.filter(e =>
+      let matchingEvents = events.filter(e =>
         e.subject.toLowerCase() === eventSubject.toLowerCase()
       );
+
+      // If startDate is provided, filter further by date
+      if (startDate && matchingEvents.length > 0) {
+        const filterDate = new Date(startDate);
+        filterDate.setHours(0, 0, 0, 0);
+        const nextDay = new Date(filterDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+
+        matchingEvents = matchingEvents.filter(e => {
+          const eventDate = new Date(e.start.dateTime);
+          return eventDate >= filterDate && eventDate < nextDay;
+        });
+
+        if (matchingEvents.length === 0) {
+          return {
+            content: [{
+              type: "text",
+              text: `No event found matching "${eventSubject}" on date ${startDate}. Try without the date filter or check the date format (YYYY-MM-DD).`
+            }]
+          };
+        }
+      }
 
       if (matchingEvents.length === 0) {
         let eventList = "Available upcoming events:\n";
@@ -71,15 +93,29 @@ async function handleCancelEvent(args) {
       }
 
       if (matchingEvents.length > 1) {
-        let eventList = "Multiple matching events found (same name, different dates):\n";
-        matchingEvents.slice(0, 10).forEach((event) => {
-          eventList += `• ${event.subject} (${event.start.dateTime})\n`;
+        let eventList = "Multiple matching events found:\n\n";
+        matchingEvents.slice(0, 10).forEach((event, index) => {
+          const startTime = new Date(event.start.dateTime).toLocaleString();
+          const endTime = new Date(event.end.dateTime).toLocaleString();
+          const location = event.location?.displayName || 'No location';
+          const attendeeCount = event.attendees?.length || 0;
+
+          eventList += `${index + 1}. "${event.subject}"\n`;
+          eventList += `   📅 ${startTime} - ${endTime}\n`;
+          eventList += `   📍 ${location}\n`;
+          eventList += `   👥 ${attendeeCount} attendees\n`;
+          eventList += `   🆔 Event ID: ${event.id}\n\n`;
         });
+
+        eventList += `To cancel a specific event, use one of these options:\n`;
+        eventList += `• Use the Event ID: {"eventId": "AQMkAD..."}\n`;
+        eventList += `• Add date filter: {"eventSubject": "${eventSubject}", "startDate": "2025-11-03"}\n`;
+        eventList += `• Be more specific with the subject name`;
 
         return {
           content: [{
             type: "text",
-            text: `Multiple events match "${eventSubject}". Please specify by date or provide eventId:\n${eventList}`
+            text: `Multiple events match "${eventSubject}":\n\n${eventList}`
           }]
         };
       }

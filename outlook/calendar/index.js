@@ -134,6 +134,10 @@ const calendarTools = [
           type: "string",
           description: "The subject/title of the event to cancel (optional if using eventId)"
         },
+        startDate: {
+          type: "string",
+          description: "Filter events by start date (YYYY-MM-DD format, e.g., '2025-11-03'). Use when multiple events have the same subject."
+        },
         comment: {
           type: "string",
           description: "Optional comment explaining the cancellation reason"
@@ -166,6 +170,10 @@ const calendarTools = [
         eventSubject: {
           type: "string",
           description: "The subject/title of the event to delete (optional if using eventId)"
+        },
+        startDate: {
+          type: "string",
+          description: "Filter events by start date (YYYY-MM-DD format, e.g., '2025-11-03'). Use when multiple events have the same subject."
         },
         maxResults: {
           type: "number",

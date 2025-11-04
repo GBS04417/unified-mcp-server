@@ -26,7 +26,7 @@ class JiraService {
     if (config.USE_TEST_MODE) {
       return { 'Authorization': 'Bearer test-token' };
     }
-    
+
     return {
       'Authorization': this.httpClient.createBasicAuth(this.username, this.password)
     };
@@ -41,7 +41,7 @@ class JiraService {
     }
 
     const url = `${this.baseUrl}/rest/api/2/issue/${issueKey}?expand=changelog,worklog,comments`;
-    
+
     try {
       const response = await this.httpClient.get(url, {
         headers: this.getAuthHeaders()
@@ -219,7 +219,7 @@ class JiraService {
   async handleFetchByLabel(label, maxResults = 50) {
     const jql = `labels = "${label}"`;
     const results = await this.searchIssues(jql, maxResults);
-    
+
     return {
       content: [{
         type: 'text',
@@ -228,20 +228,100 @@ class JiraService {
     };
   }
 
-  async handleFetchByAssignee(assignee, status, maxResults = 50) {
-    let jql = `assignee = "${assignee}"`;
-    if (status) {
-      jql += ` AND status = "${status}"`;
+  // Fetch JIRA issues by assignee - Enhanced v1.1.0 feature
+  // Uses JQL queries for efficient assignee-based searches with optional status filtering
+  // Eliminates need for manual sequential ticket checking
+  // By default, excludes accomplished/closed tasks to show only active work
+  async handleFetchByAssignee(assignee, status = null, maxResults = 500) {
+    try {
+      console.error(`[DEBUG] Fetching JIRA issues for assignee: ${assignee}, status: ${status || 'active tasks only'}`);
+
+      if (!this.baseUrl) {
+        throw new Error('JIRA baseUrl is not configured. Check your .env file.');
+      }
+
+      // Build JQL query
+      let jql = `assignee = "${assignee}"`;
+
+      if (status) {
+        // If specific status is provided, use it
+        jql += ` AND status = "${status}"`;
+      }
+      // Note: Default behavior now fetches all issues and filters client-side
+
+      jql += ' ORDER BY created DESC';
+
+      console.error(`[DEBUG] JQL Query: ${jql}`);
+
+      // Get the raw search results
+      const searchResults = await this.searchIssues(jql, maxResults);
+
+      console.error(`[DEBUG] Found ${searchResults.total || 0} total issues for assignee ${assignee}`);
+
+      // Define statuses to INCLUDE when no specific status filter is provided
+      // Only show: Open, Task Assigned, Task In Progress, Task On Hold
+      const includedStatuses = [
+        'Open', 'Task Assigned', 'Task In Progress', 'Task On Hold'
+      ];
+
+      let filteredIssues = (searchResults.issues || []);
+
+      // Apply client-side filtering if no specific status filter is provided
+      if (!status) {
+        const originalCount = filteredIssues.length;
+        filteredIssues = filteredIssues.filter(issue => {
+          const issueStatus = issue.fields.status?.name || '';
+          console.error(`[DEBUG] Checking status: "${issueStatus}"`);
+
+          // Include if status matches (case-insensitive)
+          const isIncluded = includedStatuses.some(included =>
+            issueStatus.toLowerCase() === included.toLowerCase()
+          );
+
+          console.error(`[DEBUG] Status "${issueStatus}" included: ${isIncluded}`);
+          return isIncluded;
+        });
+        console.error(`[DEBUG] After filtering: ${filteredIssues.length} active issues found (was ${originalCount} total)`);
+      }
+
+      // Enhanced issue mapping with more detailed information
+      const issues = filteredIssues.map(issue => ({
+        key: issue.key,
+        summary: issue.fields.summary || 'No summary',
+        status: issue.fields.status?.name || 'Unknown',
+        priority: issue.fields.priority?.name || 'Unknown',
+        assignee: issue.fields.assignee?.displayName || 'Unassigned',
+        reporter: issue.fields.reporter?.displayName || 'Unknown',
+        created: issue.fields.created || null,
+        updated: issue.fields.updated || null,
+        dueDate: issue.fields.duedate || null,
+        issueType: issue.fields.issuetype?.name || 'Unknown',
+        project: issue.fields.project?.name || 'Unknown',
+        labels: issue.fields.labels || [],
+        webUrl: `${this.baseUrl}/browse/${issue.key}`,
+      }));
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              assignee: assignee,
+              statusFilter: status || 'active tasks only (Open, Task Assigned, Task In Progress, Task On Hold)',
+              total: searchResults.total || 0,
+              maxResults: searchResults.maxResults || maxResults,
+              startAt: searchResults.startAt || 0,
+              returnedCount: issues.length,
+              filteredStatuses: status ? null : includedStatuses,
+              issues: issues
+            }, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      console.error(`[DEBUG] JIRA fetch by assignee error: ${error.message}`);
+      throw new Error(`Failed to fetch JIRA issues by assignee: ${error.message}`);
     }
-    
-    const results = await this.searchIssues(jql, maxResults);
-    
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify(results, null, 2)
-      }]
-    };
   }
 
   async handleAddComment(issueKey, comment, confirm = false) {
@@ -264,7 +344,7 @@ class JiraService {
     // Check for duplicate requests
     const requestKey = `${issueKey}:${comment.substring(0, 50)}`;
     const now = Date.now();
-    
+
     if (this.recentRequests.has(requestKey)) {
       const lastRequest = this.recentRequests.get(requestKey);
       if (now - lastRequest < this.REQUEST_TIMEOUT) {
@@ -292,7 +372,7 @@ class JiraService {
     }
 
     const result = await this.addComment(issueKey, comment);
-    
+
     return {
       content: [{
         type: 'text',
@@ -307,7 +387,7 @@ class JiraService {
 
   async handleListTransitions(issueKey) {
     const transitions = await this.getTransitions(issueKey);
-    
+
     return {
       content: [{
         type: 'text',
@@ -318,7 +398,7 @@ class JiraService {
 
   async handleUpdateTransition(issueKey, transitionId, comment, assignee, resolution) {
     const result = await this.transitionIssue(issueKey, transitionId, comment, assignee, resolution);
-    
+
     return {
       content: [{
         type: 'text',
@@ -333,7 +413,7 @@ class JiraService {
 
   async handleUpdateFields(issueKey, fields) {
     const result = await this.updateIssue(issueKey, fields);
-    
+
     return {
       content: [{
         type: 'text',
@@ -352,7 +432,7 @@ class JiraService {
     const editableFields = [
       'summary', 'description', 'assignee', 'priority', 'labels', 'components'
     ];
-    
+
     return {
       content: [{
         type: 'text',
@@ -380,7 +460,7 @@ class JiraService {
   async handleAggregateTestCases(label) {
     const jql = `labels = "${label}" AND summary ~ "PEER_TEST_"`;
     const results = await this.searchIssues(jql, 100);
-    
+
     return {
       content: [{
         type: 'text',
@@ -407,21 +487,21 @@ class JiraService {
   async handleTestedToTaskClosed(issueKey, comment) {
     // Get available transitions first
     const transitions = await this.getTransitions(issueKey);
-    const closeTransition = transitions.transitions?.find(t => 
-      t.name.toLowerCase().includes('close') || 
+    const closeTransition = transitions.transitions?.find(t =>
+      t.name.toLowerCase().includes('close') ||
       t.name.toLowerCase().includes('done')
     );
-    
+
     if (!closeTransition) {
       throw new Error(`No suitable 'close' transition found for ${issueKey}`);
     }
-    
+
     return await this.handleUpdateTransition(issueKey, closeTransition.id, comment);
   }
 
   async handleBatchTestedToTaskClosed(issueKeys, comment) {
     const results = [];
-    
+
     for (const issueKey of issueKeys) {
       try {
         const result = await this.handleTestedToTaskClosed(issueKey, comment);
@@ -430,7 +510,7 @@ class JiraService {
         results.push({ issueKey, success: false, error: error.message });
       }
     }
-    
+
     return {
       content: [{
         type: 'text',
@@ -448,11 +528,11 @@ class JiraService {
   async handleCsvReport(label, filePath) {
     const jql = `labels = "${label}"`;
     const results = await this.searchIssues(jql, 1000);
-    
+
     // Generate CSV content
     const csvHeaders = ['Key', 'Summary', 'Status', 'Assignee', 'Priority', 'Created', 'Updated'];
     const csvRows = [csvHeaders.join(',')];
-    
+
     if (results.issues) {
       for (const issue of results.issues) {
         const row = [
@@ -467,12 +547,12 @@ class JiraService {
         csvRows.push(row.join(','));
       }
     }
-    
+
     // Write CSV file
     try {
       const csvContent = csvRows.join('\n');
       fs.writeFileSync(filePath, csvContent, 'utf8');
-      
+
       return {
         content: [{
           type: 'text',
@@ -494,7 +574,7 @@ class JiraService {
   analyzeIssue(issueData) {
     const issue = issueData.fields;
     const analysis = [];
-    
+
     analysis.push(`🎫 JIRA Issue Analysis: ${issueData.key}`);
     analysis.push(`📝 Summary: ${issue.summary}`);
     analysis.push(`📊 Status: ${issue.status?.name}`);
@@ -502,7 +582,7 @@ class JiraService {
     analysis.push(`⭐ Priority: ${issue.priority?.name || 'Not set'}`);
     analysis.push(`📅 Created: ${issue.created}`);
     analysis.push(`🔄 Updated: ${issue.updated}`);
-    
+
     if (issue.description) {
       const analysis_desc = TextProcessor.analyzeContent(issue.description, issue.summary);
       analysis.push(`\n📖 Description Analysis:`);
@@ -510,7 +590,7 @@ class JiraService {
       analysis.push(`Key points: ${analysis_desc.keyPoints.join('; ')}`);
       analysis.push(`Business context: ${analysis_desc.businessContext.join(', ')}`);
     }
-    
+
     return analysis.join('\n');
   }
 
