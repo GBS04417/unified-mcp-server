@@ -6,6 +6,7 @@
 
 const { HttpClient, TextProcessor } = require('../utils');
 const config = require('../config');
+const mockData = require('../mock-data');
 
 class ConfluenceService {
   constructor() {
@@ -19,10 +20,10 @@ class ConfluenceService {
    * Create authorization header
    */
   getAuthHeaders() {
-    if (config.USE_TEST_MODE) {
+    if (config.CONFLUENCE_USE_TEST_MODE) {
       return { 'Authorization': 'Bearer test-token' };
     }
-    
+
     return {
       'Authorization': this.httpClient.createBasicAuth(this.username, this.password)
     };
@@ -53,7 +54,7 @@ class ConfluenceService {
    * Fetch a Confluence page
    */
   async fetchPage(url) {
-    if (config.USE_TEST_MODE) {
+    if (config.CONFLUENCE_USE_TEST_MODE) {
       return this.getMockPage(url);
     }
 
@@ -69,7 +70,7 @@ class ConfluenceService {
       if (displayMatch) {
         const spaceKey = displayMatch[1];
         const pageTitle = decodeURIComponent(displayMatch[2].replace(/\+/g, ' '));
-        
+
         // Search for the page by title and space
         apiUrl = `${this.baseUrl}/rest/api/content?spaceKey=${spaceKey}&title=${encodeURIComponent(pageTitle)}&expand=body.storage,version,space`;
       } else {
@@ -83,7 +84,7 @@ class ConfluenceService {
       });
 
       console.error(`✅ Confluence API Response Status: ${response.status}`);
-      
+
       // Handle search results vs direct page
       if (response.data.results) {
         if (response.data.results.length === 0) {
@@ -91,7 +92,7 @@ class ConfluenceService {
         }
         return response.data.results[0];
       }
-      
+
       return response.data;
     } catch (error) {
       console.error(`❌ Confluence API Error:`, error.message);
@@ -103,12 +104,12 @@ class ConfluenceService {
    * Create a new page
    */
   async createPage(spaceKey, title, content, parentPageId = null) {
-    if (config.USE_TEST_MODE) {
+    if (config.CONFLUENCE_USE_TEST_MODE) {
       return this.getMockCreatedPage(title, spaceKey);
     }
 
     const apiUrl = `${this.baseUrl}/rest/api/content`;
-    
+
     const body = {
       type: 'page',
       title: title,
@@ -141,7 +142,7 @@ class ConfluenceService {
    * Update an existing page
    */
   async updatePage(pageId, url, title, content, versionComment) {
-    if (config.USE_TEST_MODE) {
+    if (config.CONFLUENCE_USE_TEST_MODE) {
       return this.getMockUpdatedPage(pageId || 'mock-page-id');
     }
 
@@ -160,7 +161,7 @@ class ConfluenceService {
     const nextVersion = currentPage.version.number + 1;
 
     const apiUrl = `${this.baseUrl}/rest/api/content/${pageId}`;
-    
+
     const body = {
       type: 'page',
       title: title || currentPage.title,
@@ -193,7 +194,7 @@ class ConfluenceService {
    * Search pages using CQL
    */
   async searchPages(query, spaceKey, maxResults = 25) {
-    if (config.USE_TEST_MODE) {
+    if (config.CONFLUENCE_USE_TEST_MODE) {
       return this.getMockSearchResults(query);
     }
 
@@ -303,7 +304,7 @@ class ConfluenceService {
 
   async handleSearch(query, spaceKey, maxResults = 25) {
     const results = await this.searchPages(query, spaceKey, maxResults);
-    
+
     return {
       content: [{
         type: 'text',
@@ -318,7 +319,7 @@ class ConfluenceService {
             url: `${this.baseUrl}/pages/viewpage.action?pageId=${page.id}`,
             lastModified: page.version.when,
             excerpt: TextProcessor.generateSummary(
-              TextProcessor.htmlToText(page.body?.view?.value || ''), 
+              TextProcessor.htmlToText(page.body?.view?.value || ''),
               200
             )
           })) || []
@@ -330,109 +331,111 @@ class ConfluenceService {
   // Analysis helper
   analyzePage(pageData) {
     const analysis = [];
-    
+
     analysis.push(`📄 Confluence Page Analysis: ${pageData.title}`);
     analysis.push(`🏢 Space: ${pageData.space?.name || pageData.space?.key || 'Unknown'}`);
     analysis.push(`🔗 Page ID: ${pageData.id}`);
     analysis.push(`📅 Last Modified: ${pageData.version?.when}`);
     analysis.push(`👤 Last Modified By: ${pageData.version?.by?.displayName || 'Unknown'}`);
     analysis.push(`📊 Version: ${pageData.version?.number}`);
-    
+
     if (pageData.body?.storage?.value) {
       const contentAnalysis = TextProcessor.analyzeContent(
-        pageData.body.storage.value, 
+        pageData.body.storage.value,
         pageData.title
       );
-      
+
       analysis.push(`\n📖 Content Analysis:`);
       analysis.push(`Word count: ${contentAnalysis.wordCount}`);
       analysis.push(`Summary: ${contentAnalysis.summary}`);
-      
+
       if (contentAnalysis.keyPoints.length > 0) {
         analysis.push(`Key points:`);
         contentAnalysis.keyPoints.forEach((point, index) => {
           analysis.push(`  ${index + 1}. ${point}`);
         });
       }
-      
+
       if (contentAnalysis.businessContext.length > 0) {
         analysis.push(`Business context: ${contentAnalysis.businessContext.join(', ')}`);
       }
     }
-    
+
     return analysis.join('\n');
   }
 
-  // Mock data for test mode
+  // Mock data for test mode - uses organized mock data
   getMockPage(url) {
+    // Extract page ID or title from URL, or use first available page
+    const page = mockData.confluence.pages[0];
+
+    if (!page) {
+      throw new Error('No mock pages available');
+    }
+
     return {
-      id: 'mock-page-id',
-      title: 'Mock Confluence Page',
-      space: { key: 'TEST', name: 'Test Space' },
-      body: {
-        storage: {
-          value: '<p>This is a mock Confluence page for testing purposes.</p><p>It contains sample content to demonstrate the MCP server functionality.</p>',
-          representation: 'storage'
-        }
-      },
-      version: {
-        number: 1,
-        when: new Date().toISOString(),
-        by: { displayName: 'Test User' }
-      }
+      id: page.id,
+      title: page.title,
+      space: mockData.confluence.spaces.find(s => s.key === page.spaceKey) || { key: page.spaceKey, name: page.spaceKey },
+      body: page.body,
+      version: page.version,
+      created: page.createdDate,
+      lastModified: page.lastModified,
+      createdBy: page.createdBy,
+      lastModifiedBy: page.lastModifiedBy,
+      labels: page.labels || [],
+      webUrl: page.webUrl
     };
   }
 
   getMockCreatedPage(title, spaceKey) {
     return {
-      id: 'mock-created-page-id',
+      id: 'mock-created-page-' + Date.now(),
       title: title,
-      space: { key: spaceKey },
-      version: { number: 1 }
+      space: mockData.confluence.spaces.find(s => s.key === spaceKey) || { key: spaceKey, name: spaceKey },
+      version: { number: 1 },
+      created: new Date().toISOString(),
+      createdBy: mockData.confluence.users[0]
     };
   }
 
   getMockUpdatedPage(pageId) {
+    const existingPage = mockData.confluence.pages.find(p => p.id === pageId) || mockData.confluence.pages[0];
+
     return {
       id: pageId,
-      title: 'Updated Mock Page',
-      version: { number: 2 }
+      title: existingPage.title + ' (Updated)',
+      space: mockData.confluence.spaces.find(s => s.key === existingPage.spaceKey),
+      version: { number: existingPage.version.number + 1 },
+      lastModified: new Date().toISOString(),
+      lastModifiedBy: mockData.confluence.users[0]
     };
   }
 
   getMockSearchResults(query) {
+    // Use realistic search from mock data
+    const searchResults = mockData.confluence.searchResults.byText(query, 10);
+
     return {
-      size: 2,
-      results: [
-        {
-          id: 'mock-result-1',
-          title: `Search Result 1 for: ${query}`,
-          space: { key: 'TEST', name: 'Test Space' },
-          body: {
-            view: {
-              value: '<p>This is a mock search result matching your query.</p>'
-            }
-          },
-          version: {
-            when: new Date().toISOString(),
-            by: { displayName: 'Test User' }
+      size: searchResults.size,
+      start: searchResults.start,
+      limit: searchResults.limit,
+      results: searchResults.results.map(page => ({
+        id: page.id,
+        title: page.title,
+        space: mockData.confluence.spaces.find(s => s.key === page.spaceKey) || { key: page.spaceKey, name: page.spaceKey },
+        body: {
+          view: {
+            value: page.body.storage.value.substring(0, 200) + '...' // Truncated for search results
           }
         },
-        {
-          id: 'mock-result-2',
-          title: `Search Result 2 for: ${query}`,
-          space: { key: 'TEST', name: 'Test Space' },
-          body: {
-            view: {
-              value: '<p>This is another mock search result.</p>'
-            }
-          },
-          version: {
-            when: new Date().toISOString(),
-            by: { displayName: 'Test User' }
-          }
-        }
-      ]
+        version: page.version,
+        created: page.createdDate,
+        lastModified: page.lastModified,
+        createdBy: page.createdBy,
+        lastModifiedBy: page.lastModifiedBy,
+        webUrl: page.webUrl
+      }))
     };
   }
 }

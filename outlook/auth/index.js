@@ -28,7 +28,7 @@ async function handleAuthenticate(args) {
   const force = args && args.force === true;
   
   // For test mode, create a test token
-  if (config.USE_TEST_MODE) {
+  if (config.OUTLOOK_USE_TEST_MODE) {
     tokenManager.createTestTokens();
     
     return {
@@ -74,7 +74,7 @@ async function handleTokenStatus() {
         hasRefreshToken: !!status.refreshToken,
         tokenExpiry: status.expiry,
         isValid: status.isValid,
-        testMode: config.USE_TEST_MODE
+        testMode: config.OUTLOOK_USE_TEST_MODE
       }, null, 2)
     }]
   };
@@ -84,7 +84,7 @@ async function handleTokenStatus() {
  * Refresh tokens tool handler
  */
 async function handleRefreshTokens() {
-  if (config.USE_TEST_MODE) {
+  if (config.OUTLOOK_USE_TEST_MODE) {
     tokenManager.createTestTokens();
     return {
       content: [{

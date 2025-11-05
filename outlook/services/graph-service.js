@@ -6,6 +6,7 @@
 const { HttpClient } = require('../../utils');
 const { TokenManager } = require('../auth/token-manager');
 const config = require('../../config');
+const mockData = require('../../mock-data');
 
 class GraphService {
   constructor() {
@@ -29,7 +30,7 @@ class GraphService {
    * Make an authenticated request to Microsoft Graph API
    */
   async graphRequest(endpoint, options = {}) {
-    if (config.USE_TEST_MODE) {
+    if (config.OUTLOOK_USE_TEST_MODE) {
       return this.getMockResponse(endpoint, options.method || 'GET');
     }
 
@@ -124,7 +125,7 @@ class GraphService {
   // Calendar operations
   async listEvents(maxResults = 10, startDate, endDate) {
     let endpoint = `/me/events?$top=${maxResults}&$orderby=start/dateTime`;
-    
+
     if (startDate && endDate) {
       const filter = `start/dateTime ge '${startDate}' and end/dateTime le '${endDate}'`;
       endpoint += `&$filter=${encodeURIComponent(filter)}`;
@@ -190,7 +191,7 @@ class GraphService {
 
   async createFolder(name, parentFolderId) {
     const folder = { displayName: name };
-    
+
     let endpoint = '/me/mailFolders';
     if (parentFolderId) {
       endpoint = `/me/mailFolders/${parentFolderId}/childFolders`;
@@ -225,68 +226,135 @@ class GraphService {
     });
   }
 
-  // Mock responses for test mode
+  // Mock responses for test mode - uses organized mock data
   getMockResponse(endpoint, method) {
     console.error(`🧪 Mock Graph API call: ${method} ${endpoint}`);
-    
+
+    // Messages endpoint
     if (endpoint.includes('/messages')) {
       if (method === 'GET') {
+        // Check for specific query parameters
+        let emails = [...mockData.outlook.emails];
+
+        // Apply basic filtering based on endpoint
+        if (endpoint.includes('$filter=isRead eq false')) {
+          emails = emails.filter(email => !email.isRead);
+        }
+
         return {
-          value: [
-            {
-              id: 'mock-email-1',
-              subject: 'Mock Email 1',
-              from: { emailAddress: { address: 'test@example.com' } },
-              receivedDateTime: new Date().toISOString(),
-              isRead: false,
-              bodyPreview: 'This is a mock email for testing...',
-              body: { content: 'Mock email content', contentType: 'HTML' }
-            },
-            {
-              id: 'mock-email-2',
-              subject: 'Mock Email 2',
-              from: { emailAddress: { address: 'another@example.com' } },
-              receivedDateTime: new Date().toISOString(),
-              isRead: true,
-              bodyPreview: 'Another mock email...',
-              body: { content: 'Another mock email content', contentType: 'HTML' }
-            }
-          ]
+          "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#users/me/messages",
+          "@odata.count": emails.length,
+          value: emails.map(email => ({
+            id: email.id,
+            subject: email.subject,
+            sender: email.sender,
+            from: email.from,
+            toRecipients: email.toRecipients,
+            ccRecipients: email.ccRecipients,
+            receivedDateTime: email.receivedDateTime,
+            sentDateTime: email.sentDateTime,
+            hasAttachments: email.hasAttachments,
+            isRead: email.isRead,
+            importance: email.importance,
+            bodyPreview: email.bodyPreview,
+            body: email.body,
+            parentFolderId: email.parentFolderId,
+            conversationId: email.conversationId,
+            categories: email.categories,
+            attachments: email.attachments
+          }))
+        };
+      }
+
+      if (method === 'POST') {
+        return {
+          id: 'mock-sent-email-' + Date.now(),
+          subject: 'Mock Sent Email',
+          sentDateTime: new Date().toISOString()
         };
       }
     }
 
+    // Calendar events endpoint
     if (endpoint.includes('/events')) {
+      if (method === 'GET') {
+        let events = [...mockData.outlook.calendarEvents];
+
+        // Apply date filtering if present
+        if (endpoint.includes('$filter=')) {
+          const now = new Date();
+          const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+          events = events.filter(event => {
+            const eventDate = new Date(event.start.dateTime);
+            return eventDate >= now && eventDate <= nextWeek;
+          });
+        }
+
+        return {
+          "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#users/me/events",
+          value: events
+        };
+      }
+
+      if (method === 'POST') {
+        return {
+          id: 'mock-created-event-' + Date.now(),
+          subject: 'Mock Created Event',
+          start: { dateTime: new Date().toISOString(), timeZone: 'UTC' },
+          end: { dateTime: new Date(Date.now() + 3600000).toISOString(), timeZone: 'UTC' }
+        };
+      }
+    }
+
+    // Mail folders endpoint
+    if (endpoint.includes('/mailFolders')) {
+      if (method === 'GET') {
+        return {
+          "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#users/me/mailFolders",
+          value: mockData.outlook.folders
+        };
+      }
+
+      if (method === 'POST') {
+        return {
+          id: 'mock-created-folder-' + Date.now(),
+          displayName: 'Mock Created Folder',
+          parentFolderId: 'inbox'
+        };
+      }
+    }
+
+    // Message rules endpoint
+    if (endpoint.includes('/messageRules')) {
       if (method === 'GET') {
         return {
           value: [
             {
-              id: 'mock-event-1',
-              subject: 'Mock Meeting',
-              start: { dateTime: new Date().toISOString(), timeZone: 'UTC' },
-              end: { dateTime: new Date(Date.now() + 3600000).toISOString(), timeZone: 'UTC' },
-              attendees: []
+              id: 'mock-rule-1',
+              displayName: 'Mock Rule 1',
+              isEnabled: true,
+              conditions: { subjectContains: ['ALERT'] },
+              actions: { moveToFolder: 'alerts' }
             }
           ]
         };
       }
-    }
 
-    if (endpoint.includes('/mailFolders')) {
-      return {
-        value: [
-          { id: 'inbox', displayName: 'Inbox' },
-          { id: 'sent', displayName: 'Sent Items' },
-          { id: 'drafts', displayName: 'Drafts' }
-        ]
-      };
+      if (method === 'POST') {
+        return {
+          id: 'mock-created-rule-' + Date.now(),
+          displayName: 'Mock Created Rule',
+          isEnabled: true
+        };
+      }
     }
 
     // Default mock response
     return {
       success: true,
       message: `Mock response for ${method} ${endpoint}`,
-      id: 'mock-id-' + Date.now()
+      id: 'mock-id-' + Date.now(),
+      timestamp: new Date().toISOString()
     };
   }
 }

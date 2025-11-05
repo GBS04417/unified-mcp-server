@@ -12,9 +12,24 @@ const SERVER_VERSION = '1.0.0';
 const JIRA_ENABLED = process.env.DISABLE_JIRA !== 'true';
 const CONFLUENCE_ENABLED = process.env.DISABLE_CONFLUENCE !== 'true';
 const OUTLOOK_ENABLED = process.env.DISABLE_OUTLOOK !== 'true';
+const TEAM_PLANNING_ENABLED = process.env.DISABLE_TEAM_PLANNING !== 'true';
 
 // Test mode configuration
 const USE_TEST_MODE = process.env.USE_TEST_MODE === 'true';
+
+// Service-specific test mode configuration
+// Falls back to USE_TEST_MODE if service-specific setting not provided
+const JIRA_USE_TEST_MODE = process.env.JIRA_USE_TEST_MODE !== undefined
+  ? process.env.JIRA_USE_TEST_MODE === 'true'
+  : USE_TEST_MODE;
+
+const CONFLUENCE_USE_TEST_MODE = process.env.CONFLUENCE_USE_TEST_MODE !== undefined
+  ? process.env.CONFLUENCE_USE_TEST_MODE === 'true'
+  : USE_TEST_MODE;
+
+const OUTLOOK_USE_TEST_MODE = process.env.OUTLOOK_USE_TEST_MODE !== undefined
+  ? process.env.OUTLOOK_USE_TEST_MODE === 'true'
+  : USE_TEST_MODE;
 
 // JIRA Configuration
 const JIRA_CONFIG = {
@@ -77,50 +92,68 @@ const HTTP_CONFIG = {
 // Validation functions
 function validateJiraConfig() {
   if (!JIRA_ENABLED) return true;
-  
+
+  // Skip validation if using test mode
+  if (JIRA_USE_TEST_MODE) {
+    console.error('⚠️ JIRA using mock data - skipping configuration validation');
+    return true;
+  }
+
   const required = ['baseUrl', 'username'];
   const missing = required.filter(key => !JIRA_CONFIG[key]);
-  
+
   if (missing.length > 0) {
     console.error(`❌ Missing JIRA configuration: ${missing.join(', ')}`);
     return false;
   }
-  
-  if (!JIRA_CONFIG.password && !USE_TEST_MODE) {
+
+  if (!JIRA_CONFIG.password) {
     console.error('❌ JIRA password required (set JIRA_PASSWORD or SYSTEM_PASSWORD)');
     return false;
   }
-  
+
   return true;
 }
 
 function validateConfluenceConfig() {
   if (!CONFLUENCE_ENABLED) return true;
-  
+
+  // Skip validation if using test mode
+  if (CONFLUENCE_USE_TEST_MODE) {
+    console.error('⚠️ Confluence using mock data - skipping configuration validation');
+    return true;
+  }
+
   const required = ['baseUrl', 'username'];
   const missing = required.filter(key => !CONFLUENCE_CONFIG[key]);
-  
+
   if (missing.length > 0) {
     console.error(`❌ Missing Confluence configuration: ${missing.join(', ')}`);
     return false;
   }
-  
-  if (!CONFLUENCE_CONFIG.password && !USE_TEST_MODE) {
+
+  if (!CONFLUENCE_CONFIG.password) {
     console.error('❌ Confluence password required (set CONFLUENCE_PASSWORD or SYSTEM_PASSWORD)');
     return false;
   }
-  
+
   return true;
 }
 
 function validateOutlookConfig() {
   if (!OUTLOOK_ENABLED) return true;
-  
+
+  // Skip validation if using test mode
+  if (OUTLOOK_USE_TEST_MODE) {
+    console.error('⚠️ Outlook using mock data - skipping configuration validation');
+    return true;
+  }
+
   if (!OUTLOOK_CONFIG.clientId || OUTLOOK_CONFIG.clientId === 'your-azure-app-client-id') {
     console.error('❌ Azure Client ID required (set AZURE_CLIENT_ID)');
     return false;
   }
-  
+
   return true;
 }
 
@@ -131,16 +164,20 @@ function validateConfiguration() {
     validateConfluenceConfig(),
     validateOutlookConfig()
   ];
-  
+
   const isValid = validations.every(v => v);
-  
+
   if (!isValid) {
-    console.error('❌ Configuration validation failed. Please check your environment variables.');
-    if (!USE_TEST_MODE) {
+    console.error('⚠️ Configuration validation failed. Some services may not work without proper configuration.');
+    console.error('💡 Services using mock data will still function normally.');
+    // Only exit if no services can function
+    const hasAnyWorkingService = JIRA_USE_TEST_MODE || CONFLUENCE_USE_TEST_MODE || OUTLOOK_USE_TEST_MODE;
+    if (!hasAnyWorkingService && !USE_TEST_MODE) {
+      console.error('❌ No services can function - all require configuration or test mode');
       process.exit(1);
     }
   }
-  
+
   return isValid;
 }
 
@@ -153,7 +190,11 @@ module.exports = {
   JIRA_ENABLED,
   CONFLUENCE_ENABLED,
   OUTLOOK_ENABLED,
+  TEAM_PLANNING_ENABLED,
   USE_TEST_MODE,
+  JIRA_USE_TEST_MODE,
+  CONFLUENCE_USE_TEST_MODE,
+  OUTLOOK_USE_TEST_MODE,
   JIRA_CONFIG,
   CONFLUENCE_CONFIG,
   OUTLOOK_CONFIG,

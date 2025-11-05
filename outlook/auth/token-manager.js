@@ -98,7 +98,7 @@ class TokenManager {
    * Get access token for API calls
    */
   getAccessToken() {
-    if (config.USE_TEST_MODE) {
+    if (config.OUTLOOK_USE_TEST_MODE) {
       return this.tokens.access_token || 'test-access-token';
     }
 
@@ -113,7 +113,7 @@ class TokenManager {
    * Exchange authorization code for tokens
    */
   async exchangeCodeForTokens(code) {
-    if (config.USE_TEST_MODE) {
+    if (config.OUTLOOK_USE_TEST_MODE) {
       this.createTestTokens();
       return this.tokens;
     }
@@ -151,7 +151,7 @@ class TokenManager {
    * Refresh access token using refresh token
    */
   async refreshTokens() {
-    if (config.USE_TEST_MODE) {
+    if (config.OUTLOOK_USE_TEST_MODE) {
       this.createTestTokens();
       return this.tokens;
     }
@@ -210,7 +210,7 @@ class TokenManager {
    * Auto-refresh tokens if needed
    */
   async ensureValidToken() {
-    if (config.USE_TEST_MODE) {
+    if (config.OUTLOOK_USE_TEST_MODE) {
       if (!this.hasValidTokens()) {
         this.createTestTokens();
       }

@@ -22,15 +22,30 @@ const { jiraTools, jiraService } = require('./jira');
 const { confluenceTools, confluenceService } = require('./confluence');
 const { outlookTools, outlookService } = require('./outlook');
 const PrioritySystemService = require('./priority-system');
+const { TeamPlanningService } = require('./team-planner');
+const LLMChatAssistant = require('./chat-assistant');
 
 // Initialize priority system
 const prioritySystem = new PrioritySystemService();
 
+// Initialize team planning system
+const teamPlanningService = new TeamPlanningService();
+
+// Initialize chat assistant
+const chatAssistant = new LLMChatAssistant({
+  llmProvider: process.env.LLM_PROVIDER || 'openai',
+  model: process.env.LLM_MODEL || 'gpt-4',
+  apiKey: process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY,
+  temperature: 0.7,
+  maxTokens: 2000
+});
+
 // Log startup information
 console.error(`🚀 STARTING UNIFIED MCP SERVER v${config.SERVER_VERSION}`);
-console.error(`📊 JIRA Integration: ${config.JIRA_ENABLED ? 'ENABLED' : 'DISABLED'}`);
-console.error(`📄 Confluence Integration: ${config.CONFLUENCE_ENABLED ? 'ENABLED' : 'DISABLED'}`);
-console.error(`📧 Outlook Integration: ${config.OUTLOOK_ENABLED ? 'ENABLED' : 'DISABLED'}`);
+console.error(`📊 JIRA Integration: ${config.JIRA_ENABLED ? 'ENABLED' : 'DISABLED'} ${config.JIRA_ENABLED ? (config.JIRA_USE_TEST_MODE ? '(MOCK DATA)' : '(LIVE DATA)') : ''}`);
+console.error(`📄 Confluence Integration: ${config.CONFLUENCE_ENABLED ? 'ENABLED' : 'DISABLED'} ${config.CONFLUENCE_ENABLED ? (config.CONFLUENCE_USE_TEST_MODE ? '(MOCK DATA)' : '(LIVE DATA)') : ''}`);
+console.error(`📧 Outlook Integration: ${config.OUTLOOK_ENABLED ? 'ENABLED' : 'DISABLED'} ${config.OUTLOOK_ENABLED ? (config.OUTLOOK_USE_TEST_MODE ? '(MOCK DATA)' : '(LIVE DATA)') : ''}`);
+console.error(`👥 Team Planning Integration: ${config.TEAM_PLANNING_ENABLED ? 'ENABLED' : 'DISABLED'}`);
 
 // Combine all tools based on enabled services
 const ALL_TOOLS = [];
@@ -75,6 +90,59 @@ const priorityTools = prioritySystem.getTools().map(tool => ({
 
 ALL_TOOLS.push(...priorityTools);
 console.error(`✅ Priority System: ${priorityTools.length} tools loaded`);
+
+// Add team planning tools if enabled
+if (config.TEAM_PLANNING_ENABLED) {
+  const teamPlanningTools = Object.keys(teamPlanningService.tools).map(toolName => ({
+    name: `team_${toolName}`,
+    description: teamPlanningService.tools[toolName].description,
+    inputSchema: teamPlanningService.tools[toolName].inputSchema,
+    handler: async (args) => {
+      // Lazy initialization on first use
+      if (!teamPlanningService.jiraService) {
+        await teamPlanningService.initialize(
+          config.JIRA_ENABLED ? jiraService : null,
+          {
+            excelFilePath: './NEW_CHENNAI_PLAN_2025.xlsx',
+            backupEnabled: true,
+            teamMembers: [
+              'Mani', 'Arunkumar', 'Kamesh K', 'Architha N', 'Suresh J',
+              'Abrar Ul Haq N', 'Archana', 'Venkatesan', 'Ranjana D',
+              'Abarna A', 'Sri Geetha S'
+            ]
+          }
+        );
+      }
+      return await teamPlanningService.tools[toolName].handler(args);
+    }
+  }));
+
+  ALL_TOOLS.push(...teamPlanningTools);
+  console.error(`✅ Team Planning: ${teamPlanningTools.length} tools loaded`);
+
+  // Add chat assistant tools
+  const chatAssistantTools = chatAssistant.getTools().map(tool => ({
+    name: `chat_${tool.name}`,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
+    handler: async (args) => {
+      // Initialize chat assistant with services on first use
+      if (!chatAssistant.jiraService) {
+        await chatAssistant.initialize({
+          jiraService: config.JIRA_ENABLED ? jiraService : null,
+          confluenceService: config.CONFLUENCE_ENABLED ? confluenceService : null,
+          outlookService: config.OUTLOOK_ENABLED ? outlookService : null,
+          prioritySystem: prioritySystem,
+          teamPlanningService: teamPlanningService
+        });
+      }
+      return await chatAssistant.handleToolCall(tool.name, args);
+    }
+  }));
+
+  ALL_TOOLS.push(...chatAssistantTools);
+  console.error(`✅ Chat Assistant: ${chatAssistantTools.length} tools loaded`);
+}
 
 console.error(`🔧 Total tools available: ${ALL_TOOLS.length}`);
 

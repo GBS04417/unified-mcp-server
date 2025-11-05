@@ -29,13 +29,62 @@ const { outlookTools } = require('./outlook');
 const { jiraTools } = require('./jira');
 const { confluenceTools } = require('./confluence');
 const { priorityTools } = require('./utils');
+const { TeamPlanningService } = require('./team-planner');
+const LLMChatAssistant = require('./chat-assistant');
+
+// Initialize chat assistant
+const chatAssistant = new LLMChatAssistant({
+    llmProvider: process.env.LLM_PROVIDER || 'vscode-copilot',
+    model: process.env.LLM_MODEL || 'copilot-chat',
+    temperature: parseFloat(process.env.LLM_TEMPERATURE) || 0.7,
+    maxTokens: parseInt(process.env.LLM_MAX_TOKENS) || 2000
+});
+
+// Initialize team planner service
+const teamPlannerService = new TeamPlanningService();
+
+// Initialize JIRA service for team planner
+const { jiraService } = require('./jira');
+
+// Create team planner tools array with JIRA integration
+const teamPlannerTools = Object.keys(teamPlannerService.tools).map(toolName => ({
+    name: toolName,
+    description: teamPlannerService.tools[toolName].description,
+    inputSchema: teamPlannerService.tools[toolName].inputSchema,
+    handler: async (args) => {
+        // Initialize with JIRA service on first use
+        if (!teamPlannerService.jiraService) {
+            await teamPlannerService.initialize(jiraService, {
+                excelFilePath: './NEW_CHENNAI_PLAN_2025.xlsx',
+                backupEnabled: true,
+                teamMembers: [
+                    'Sankar', 'Arunkumar', 'Kaushik S', 'Rajapandi', 'Venkat',
+                    'Lok', 'Vallarasu', 'Srividya', 'Prem', 'Dinesh', 'Anbu'
+                ]
+            });
+        }
+        return await teamPlannerService.tools[toolName].handler(args);
+    }
+}));
+
+// Create chat tools array 
+const chatTools = chatAssistant.getTools().map(tool => ({
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
+    handler: async (args) => {
+        return await chatAssistant.handleToolCall(tool.name, args);
+    }
+}));
 
 // Combine all tools with service prefixes
 const allTools = {
     outlook: outlookTools,
     jira: jiraTools,
     confluence: confluenceTools,
-    priority: priorityTools
+    priority: priorityTools,
+    'team-planner': teamPlannerTools,
+    chat: chatTools
 };/**
  * Parse command line arguments into parameters object
  */
@@ -187,6 +236,8 @@ function showHelp() {
 
     console.log('\n💡 Usage Examples:');
     console.log('─'.repeat(40));
+    console.log('node run-tool.js chat.chat --message "What can you help me with?"');
+    console.log('node run-tool.js chat.chat --message "Show me my JIRA tasks"');
     console.log('node run-tool.js outlook.create-event --subject "Team Meeting" --attendees "user@domain.com" --start "18:00"');
     console.log('node run-tool.js jira.jira_fetch_by_assignee --assignee "Abrar ul haq N"');
     console.log('node run-tool.js confluence.confluence_fetch --url "/display/ITDQ/Project+Management"');

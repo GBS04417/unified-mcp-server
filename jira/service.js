@@ -6,6 +6,7 @@
 
 const { HttpClient, TextProcessor } = require('../utils');
 const config = require('../config');
+const mockData = require('../mock-data');
 const fs = require('fs');
 const path = require('path');
 
@@ -23,7 +24,7 @@ class JiraService {
    * Create authorization header
    */
   getAuthHeaders() {
-    if (config.USE_TEST_MODE) {
+    if (config.JIRA_USE_TEST_MODE) {
       return { 'Authorization': 'Bearer test-token' };
     }
 
@@ -36,7 +37,7 @@ class JiraService {
    * Fetch a JIRA issue
    */
   async fetchIssue(issueKey) {
-    if (config.USE_TEST_MODE) {
+    if (config.JIRA_USE_TEST_MODE) {
       return this.getMockIssue(issueKey);
     }
 
@@ -59,7 +60,7 @@ class JiraService {
    * Search JIRA issues with JQL
    */
   async searchIssues(jql, maxResults = 50) {
-    if (config.USE_TEST_MODE) {
+    if (config.JIRA_USE_TEST_MODE) {
       return this.getMockSearchResults(jql, maxResults);
     }
 
@@ -86,7 +87,7 @@ class JiraService {
    * Add comment to JIRA issue
    */
   async addComment(issueKey, comment) {
-    if (config.USE_TEST_MODE) {
+    if (config.JIRA_USE_TEST_MODE) {
       return { id: 'test-comment-id', body: comment };
     }
 
@@ -109,7 +110,7 @@ class JiraService {
    * Get available transitions for an issue
    */
   async getTransitions(issueKey) {
-    if (config.USE_TEST_MODE) {
+    if (config.JIRA_USE_TEST_MODE) {
       return this.getMockTransitions();
     }
 
@@ -131,7 +132,7 @@ class JiraService {
    * Transition an issue
    */
   async transitionIssue(issueKey, transitionId, comment, assignee, resolution) {
-    if (config.USE_TEST_MODE) {
+    if (config.JIRA_USE_TEST_MODE) {
       return { success: true, transitionId };
     }
 
@@ -169,7 +170,7 @@ class JiraService {
    * Update issue fields
    */
   async updateIssue(issueKey, fields) {
-    if (config.USE_TEST_MODE) {
+    if (config.JIRA_USE_TEST_MODE) {
       return { success: true, fields };
     }
 
@@ -594,29 +595,82 @@ class JiraService {
     return analysis.join('\n');
   }
 
-  // Mock data for test mode
+  // Mock data for test mode - uses organized mock data
   getMockIssue(issueKey) {
+    // Find specific issue by key, or return first available
+    const issue = mockData.jira.issues.find(i => i.key === issueKey) || mockData.jira.issues[0];
+
+    if (!issue) {
+      throw new Error(`Mock issue ${issueKey} not found`);
+    }
+
+    // Convert to JIRA API format
     return {
-      key: issueKey,
+      key: issue.key,
+      id: issue.id,
       fields: {
-        summary: `Mock issue: ${issueKey}`,
-        description: 'This is a mock issue for testing purposes',
-        status: { name: 'Open' },
-        assignee: { displayName: 'Test User' },
-        priority: { name: 'Medium' },
-        created: new Date().toISOString(),
-        updated: new Date().toISOString()
-      }
+        summary: issue.summary,
+        description: issue.description,
+        status: issue.status,
+        assignee: issue.assignee,
+        reporter: issue.reporter,
+        priority: issue.priority,
+        project: issue.project,
+        created: issue.created,
+        updated: issue.updated,
+        resolutiondate: issue.resolutionDate,
+        duedate: issue.dueDate,
+        labels: issue.labels,
+        components: issue.components,
+        fixVersions: issue.fixVersions,
+        issuetype: issue.issueType
+      },
+      webUrl: issue.webUrl
     };
   }
 
-  getMockSearchResults(jql, maxResults) {
+  getMockSearchResults(jql, maxResults = 50) {
+    let filtered = [...mockData.jira.issues];
+
+    // Basic JQL parsing for realistic filtering
+    if (jql.includes('assignee =')) {
+      const assigneeMatch = jql.match(/assignee\s*=\s*"([^"]+)"/);
+      if (assigneeMatch) {
+        const assigneeName = assigneeMatch[1];
+        filtered = filtered.filter(issue =>
+          issue.assignee && issue.assignee.displayName.includes(assigneeName)
+        );
+      }
+    }
+
+    if (jql.includes('project =')) {
+      const projectMatch = jql.match(/project\s*=\s*"?([^"\s]+)"?/);
+      if (projectMatch) {
+        const projectKey = projectMatch[1];
+        filtered = filtered.filter(issue => issue.project.key === projectKey);
+      }
+    }
+
+    if (jql.includes('status IN')) {
+      const statusMatch = jql.match(/status\s+IN\s*\(([^)]+)\)/);
+      if (statusMatch) {
+        const statuses = statusMatch[1].split(',').map(s => s.trim().replace(/["']/g, ''));
+        filtered = filtered.filter(issue =>
+          statuses.some(status => issue.status.name.includes(status))
+        );
+      }
+    }
+
+    // Apply maxResults limit
+    const limitedResults = filtered.slice(0, maxResults);
+
+    // Convert to JIRA API search format
     return {
-      total: 2,
-      issues: [
-        this.getMockIssue('TEST-1'),
-        this.getMockIssue('TEST-2')
-      ]
+      expand: "names,schema",
+      startAt: 0,
+      maxResults: maxResults,
+      total: filtered.length,
+      issues: limitedResults.map(issue => this.getMockIssue(issue.key))
     };
   }
 
