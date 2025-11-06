@@ -237,6 +237,47 @@ class JiraService {
     try {
       console.error(`[DEBUG] Fetching JIRA issues for assignee: ${assignee}, status: ${status || 'active tasks only'}`);
 
+      // Use mock data in test mode
+      if (config.JIRA_USE_TEST_MODE) {
+        console.error('[DEBUG] Using mock data for JIRA fetch by assignee');
+        const mockResults = this.getMockSearchResults(`assignee = "${assignee}"`, maxResults);
+
+        const issues = mockResults.issues.map(issue => ({
+          key: issue.key,
+          summary: issue.fields.summary || 'No summary',
+          status: issue.fields.status?.name || 'Unknown',
+          priority: issue.fields.priority?.name || 'Unknown',
+          assignee: issue.fields.assignee?.displayName || 'Unassigned',
+          reporter: issue.fields.reporter?.displayName || 'Unknown',
+          created: issue.fields.created || null,
+          updated: issue.fields.updated || null,
+          dueDate: issue.fields.duedate || null,
+          issueType: issue.fields.issuetype?.name || 'Unknown',
+          project: issue.fields.project?.name || 'Unknown',
+          labels: issue.fields.labels || [],
+          webUrl: `${this.baseUrl || 'https://mock.jira.com'}/browse/${issue.key}`,
+        }));
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                assignee: assignee,
+                statusFilter: status || 'active tasks only (Open, Task Assigned, Task In Progress, Task On Hold)',
+                total: mockResults.total || 0,
+                maxResults: mockResults.maxResults || maxResults,
+                startAt: mockResults.startAt || 0,
+                returnedCount: issues.length,
+                filteredStatuses: status ? null : ['Open', 'Task Assigned', 'Task In Progress', 'Task On Hold'],
+                issues: issues,
+                mockMode: true
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
       if (!this.baseUrl) {
         throw new Error('JIRA baseUrl is not configured. Check your .env file.');
       }

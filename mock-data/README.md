@@ -1,6 +1,6 @@
 # Mock Data Documentation
 
-This directory contains organized, realistic mock data for the Unified MCP Server, based on real data patterns extracted from live JIRA, Confluence, and Outlook systems.
+This directory contains organized, realistic mock data for SmartStart AI, based on real data patterns extracted from live JIRA, Confluence, and Outlook systems.
 
 ## 📁 Structure
 

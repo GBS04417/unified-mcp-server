@@ -23,7 +23,7 @@ const { confluenceTools, confluenceService } = require('./confluence');
 const { outlookTools, outlookService } = require('./outlook');
 const PrioritySystemService = require('./priority-system');
 const { TeamPlanningService } = require('./team-planner');
-const LLMChatAssistant = require('./chat-assistant');
+const AdaptiveChatAssistant = require('./chat-assistant/adaptive_assistant');
 
 // Initialize priority system
 const prioritySystem = new PrioritySystemService();
@@ -31,8 +31,8 @@ const prioritySystem = new PrioritySystemService();
 // Initialize team planning system
 const teamPlanningService = new TeamPlanningService();
 
-// Initialize chat assistant
-const chatAssistant = new LLMChatAssistant({
+// Initialize adaptive chat assistant
+const chatAssistant = new AdaptiveChatAssistant({
   llmProvider: process.env.LLM_PROVIDER || 'openai',
   model: process.env.LLM_MODEL || 'gpt-4',
   apiKey: process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY,
@@ -41,7 +41,7 @@ const chatAssistant = new LLMChatAssistant({
 });
 
 // Log startup information
-console.error(`🚀 STARTING UNIFIED MCP SERVER v${config.SERVER_VERSION}`);
+console.error(`🚀 STARTING SMARTSTART AI v${config.SERVER_VERSION}`);
 console.error(`📊 JIRA Integration: ${config.JIRA_ENABLED ? 'ENABLED' : 'DISABLED'} ${config.JIRA_ENABLED ? (config.JIRA_USE_TEST_MODE ? '(MOCK DATA)' : '(LIVE DATA)') : ''}`);
 console.error(`📄 Confluence Integration: ${config.CONFLUENCE_ENABLED ? 'ENABLED' : 'DISABLED'} ${config.CONFLUENCE_ENABLED ? (config.CONFLUENCE_USE_TEST_MODE ? '(MOCK DATA)' : '(LIVE DATA)') : ''}`);
 console.error(`📧 Outlook Integration: ${config.OUTLOOK_ENABLED ? 'ENABLED' : 'DISABLED'} ${config.OUTLOOK_ENABLED ? (config.OUTLOOK_USE_TEST_MODE ? '(MOCK DATA)' : '(LIVE DATA)') : ''}`);
@@ -179,7 +179,7 @@ server.fallbackRequestHandler = async (request) => {
         serverInfo: {
           name: config.SERVER_NAME,
           version: config.SERVER_VERSION,
-          description: "Unified MCP server for JIRA, Confluence, and Outlook integration"
+          description: "SmartStart AI - Intelligent productivity platform for JIRA, Confluence, and Outlook integration"
         }
       };
     }
@@ -272,7 +272,7 @@ process.on('SIGINT', () => {
 const transport = new StdioServerTransport();
 server.connect(transport)
   .then(() => {
-    console.error(`🎯 ${config.SERVER_NAME} connected and ready`);
+    console.error(`🎯 SmartStart AI connected and ready`);
     console.error(`📡 Listening on STDIO transport`);
   })
   .catch(error => {

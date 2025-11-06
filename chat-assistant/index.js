@@ -49,7 +49,7 @@ class LLMChatAssistant {
         this.prioritySystem = services.prioritySystem;
         this.teamPlanningService = services.teamPlanningService;
 
-        console.error('✅ LLM Chat Assistant initialized with services');
+        console.error('✅ Smartstart Assistant initialized with services');
     }
 
     /**
@@ -62,7 +62,26 @@ class LLMChatAssistant {
             parameters: { assignee: 'string' },
             handler: async (params) => {
                 if (!this.jiraService) return { error: 'JIRA service not available' };
-                return await this.jiraService.fetchTasksByAssignee(params.assignee);
+                try {
+                    const mcpResult = await this.jiraService.handleFetchByAssignee(params.assignee);
+                    // Extract data from MCP format for chat assistant
+                    if (mcpResult.content && mcpResult.content[0] && mcpResult.content[0].text) {
+                        const parsedData = JSON.parse(mcpResult.content[0].text);
+                        return {
+                            success: true,
+                            data: parsedData.issues || [],
+                            summary: {
+                                assignee: parsedData.assignee,
+                                total: parsedData.total,
+                                returnedCount: parsedData.returnedCount,
+                                statusFilter: parsedData.statusFilter
+                            }
+                        };
+                    }
+                    return { success: false, error: 'Invalid response format from JIRA service' };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
             }
         });
 
@@ -102,7 +121,7 @@ class LLMChatAssistant {
             parameters: { focusUser: 'string?' },
             handler: async (params) => {
                 if (!this.prioritySystem) return { error: 'Priority system not available' };
-                return await this.prioritySystem.handleToolCall('dashboard_data', params);
+                return await this.prioritySystem.handleToolCall('get_urgent_items', params);
             }
         });
 
@@ -111,7 +130,7 @@ class LLMChatAssistant {
             parameters: { query: 'string', spaceKey: 'string?' },
             handler: async (params) => {
                 if (!this.confluenceService) return { error: 'Confluence service not available' };
-                return await this.confluenceService.searchContent(params.query, params.spaceKey);
+                return await this.confluenceService.handleSearch(params.query, params.spaceKey);
             }
         });
     }
@@ -173,51 +192,138 @@ class LLMChatAssistant {
      * Analyze user intent to determine what tools might be needed
      */
     async analyzeIntent(message) {
+        // Enhanced keywords with more comprehensive patterns
         const keywords = {
-            jira: ['task', 'issue', 'ticket', 'jira', 'assigned', 'bug', 'story'],
-            outlook: ['email', 'calendar', 'meeting', 'appointment', 'schedule', 'mail'],
-            confluence: ['confluence', 'page', 'document', 'wiki', 'space'],
-            team: ['team', 'member', 'workload', 'capacity', 'planning', 'dinesh', 'abrar'],
-            priority: ['priority', 'urgent', 'dashboard', 'important', 'deadline']
+            jira: ['task', 'issue', 'ticket', 'jira', 'assigned', 'bug', 'story', 'project', 'work', 'todo', 'backlog', 'sprint', 'progress', 'status'],
+            outlook: ['email', 'calendar', 'meeting', 'appointment', 'schedule', 'mail', 'message', 'inbox', 'event'],
+            confluence: ['confluence', 'page', 'document', 'wiki', 'space', 'documentation', 'guide', 'manual'],
+            team: ['team', 'member', 'workload', 'capacity', 'planning', 'resource', 'allocation', 'analysis'],
+            priority: ['priority', 'urgent', 'dashboard', 'important', 'deadline', 'critical', 'high']
+        };
+
+        // Specific action patterns that should trigger tools
+        const toolPatterns = {
+            get_my_tasks: [
+                /get.*tasks?.*for/i,
+                /show.*tasks?.*for/i,
+                /list.*tasks?.*for/i,
+                /tasks?.*assigned.*to/i,
+                /tasks?.*for.*\w+/i,
+                /what.*tasks?.*(has|have)/i,
+                /\w+.*tasks?/i,
+                /(jira|assigned).*tasks?/i,
+                /tasks?.*(progress|status)/i,
+                /show.*me.*\w+.*(work|task)/i,
+                /\w+.*(work|task).*(status|progress)/i,
+                /work.*status.*for/i,
+                /status.*of.*\w+/i,
+                /\w+.*(current|active).*(assignments?|tasks?)/i,
+                /about.*\w+.*(assignments?|work|tasks?)/i,
+                /(assignments?|work).*for.*\w+/i,
+                /tell.*me.*about.*\w+/i,
+                /list.*all.*(jira|tasks?|tickets?|issues?)/i,
+                /(tickets?|issues?).*assigned.*to/i,
+                /get.*(tickets?|issues?).*for/i,
+                /show.*(tickets?|issues?).*for/i,
+                /\w+.*(tickets?|issues?)/i
+            ],
+            search_emails: [
+                /search.*email/i,
+                /find.*email/i,
+                /email.*about/i,
+                /messages?.*from/i
+            ],
+            get_calendar_events: [
+                /calendar/i,
+                /meetings?.*today|tomorrow|week/i,
+                /schedule.*for/i,
+                /events?.*upcoming/i
+            ],
+            analyze_team_member: [
+                /analyz.*workload/i,
+                /team.*capacity/i,
+                /resource.*allocation/i,
+                /planning.*for/i
+            ],
+            get_priority_dashboard: [
+                /priority.*dashboard/i,
+                /urgent.*items/i,
+                /high.*priority/i
+            ],
+            search_confluence: [
+                /search.*confluence/i,
+                /find.*documentation/i,
+                /confluence.*page/i
+            ]
         };
 
         const messageLower = message.toLowerCase();
         const detectedServices = [];
         const potentialTools = [];
 
-        // Detect which services might be needed
-        for (const [service, serviceKeywords] of Object.entries(keywords)) {
-            if (serviceKeywords.some(keyword => messageLower.includes(keyword))) {
-                detectedServices.push(service);
+        // First, use pattern matching for direct tool detection
+        for (const [toolName, patterns] of Object.entries(toolPatterns)) {
+            if (patterns.some(pattern => pattern.test(message))) {
+                potentialTools.push(toolName);
+                console.log(`[DEBUG] Pattern matched for tool: ${toolName}`);
             }
         }
 
-        // Map services to specific tools
-        if (detectedServices.includes('jira')) {
-            if (messageLower.includes('my task') || messageLower.includes('assigned to')) {
-                potentialTools.push('get_my_tasks');
+        // If no tools detected via patterns, fall back to keyword-based detection
+        if (potentialTools.length === 0) {
+            console.log('[DEBUG] No pattern matches, using keyword detection');
+
+            // Detect which services might be needed
+            for (const [service, serviceKeywords] of Object.entries(keywords)) {
+                if (serviceKeywords.some(keyword => messageLower.includes(keyword))) {
+                    detectedServices.push(service);
+                }
             }
-        }
 
-        if (detectedServices.includes('outlook')) {
-            if (messageLower.includes('email') || messageLower.includes('mail')) {
-                potentialTools.push('search_emails');
+            // Map services to specific tools with enhanced logic
+            if (detectedServices.includes('jira')) {
+                if (messageLower.includes('my task') || messageLower.includes('assigned to') ||
+                    messageLower.includes('jira task') || messageLower.includes('get task') ||
+                    messageLower.includes('tasks for') || messageLower.includes('show task') ||
+                    messageLower.includes('work') || messageLower.includes('progress') ||
+                    messageLower.includes('assignment') || messageLower.includes('current') ||
+                    messageLower.includes('about') && messageLower.includes('task')) {
+                    potentialTools.push('get_my_tasks');
+                }
             }
-            if (messageLower.includes('calendar') || messageLower.includes('meeting')) {
-                potentialTools.push('get_calendar_events');
+
+            if (detectedServices.includes('outlook')) {
+                if (messageLower.includes('email') || messageLower.includes('mail')) {
+                    potentialTools.push('search_emails');
+                }
+                if (messageLower.includes('calendar') || messageLower.includes('meeting')) {
+                    potentialTools.push('get_calendar_events');
+                }
             }
-        }
 
-        if (detectedServices.includes('team')) {
-            potentialTools.push('analyze_team_member');
-        }
+            // Only use team analysis if explicitly asking for workload/capacity analysis
+            // and NOT asking for direct JIRA tasks
+            if (detectedServices.includes('team') && !potentialTools.includes('get_my_tasks')) {
+                if (messageLower.includes('workload') || messageLower.includes('capacity') ||
+                    messageLower.includes('analyze') || messageLower.includes('planning')) {
+                    potentialTools.push('analyze_team_member');
+                }
+            }
 
-        if (detectedServices.includes('priority')) {
-            potentialTools.push('get_priority_dashboard');
-        }
+            if (detectedServices.includes('priority')) {
+                potentialTools.push('get_priority_dashboard');
+            }
 
-        if (detectedServices.includes('confluence')) {
-            potentialTools.push('search_confluence');
+            if (detectedServices.includes('confluence')) {
+                potentialTools.push('search_confluence');
+            }
+        } else {
+            // If tools were detected via patterns, also detect services for context
+            for (const [service, serviceKeywords] of Object.entries(keywords)) {
+                if (serviceKeywords.some(keyword => messageLower.includes(keyword))) {
+                    detectedServices.push(service);
+                }
+            }
         }
 
         return {
@@ -263,12 +369,22 @@ class LLMChatAssistant {
         // Simple parameter extraction based on patterns
         const params = {};
 
-        // Extract user names
-        const userNames = ['dinesh', 'abrar', 'sankar', 'arunkumar', 'kamesh', 'architha', 'suresh'];
-        for (const name of userNames) {
-            if (messageLower.includes(name)) {
-                params.memberName = name.charAt(0).toUpperCase() + name.slice(1);
-                params.assignee = params.memberName;
+        // Extract user names with full names for JIRA
+        const userNameMap = {
+            'dinesh': { memberName: 'Dinesh', assignee: 'Dinesh Kumar M' },
+            'abrar': { memberName: 'Abrar', assignee: 'Abrar ul haq N' },
+            'sankar': { memberName: 'Sankar', assignee: 'Mani S' },
+            'mani': { memberName: 'Mani', assignee: 'Mani S' },
+            'arunkumar': { memberName: 'Arunkumar', assignee: 'Arunkumar' },
+            'kamesh': { memberName: 'Kamesh', assignee: 'Kamesh' },
+            'architha': { memberName: 'Architha', assignee: 'Architha' },
+            'suresh': { memberName: 'Suresh', assignee: 'Suresh' }
+        };
+
+        for (const [searchName, names] of Object.entries(userNameMap)) {
+            if (messageLower.includes(searchName)) {
+                params.memberName = names.memberName;
+                params.assignee = names.assignee;
                 break;
             }
         }
@@ -283,10 +399,57 @@ class LLMChatAssistant {
             }
         }
 
-        // Extract search queries (simple heuristic)
-        const searchPhrases = lastUserMessage.match(/"([^"]+)"/);
-        if (searchPhrases) {
-            params.query = searchPhrases[1];
+        // Extract search queries for different tools
+        if (toolName === 'search_emails') {
+            // Extract email search query
+            const searchPhrases = lastUserMessage.match(/"([^"]+)"/);
+            if (searchPhrases) {
+                params.query = searchPhrases[1];
+            } else {
+                // Try to extract query from common patterns
+                const aboutMatch = lastUserMessage.match(/about\s+([^,\s]+(?:\s+[^,\s]+)*)/i);
+                const searchMatch = lastUserMessage.match(/search.*emails?\s+.*?([a-zA-Z][^,.\s]+(?:\s+[a-zA-Z][^,.\s]+)*)/i);
+
+                if (aboutMatch) {
+                    params.query = aboutMatch[1].trim();
+                } else if (searchMatch) {
+                    params.query = searchMatch[1].trim();
+                } else {
+                    // Default search query extraction
+                    const words = lastUserMessage.toLowerCase().split(' ');
+                    const emailIndex = words.findIndex(w => w.includes('email'));
+                    if (emailIndex > -1 && emailIndex < words.length - 1) {
+                        params.query = words.slice(emailIndex + 1).join(' ').replace(/[^\w\s]/g, '').trim();
+                    }
+                }
+            }
+
+            // Default folder if not specified
+            if (!params.folder) {
+                params.folder = 'inbox';
+            }
+        } else if (toolName === 'search_confluence') {
+            // Extract confluence search query
+            const searchPhrases = lastUserMessage.match(/"([^"]+)"/);
+            if (searchPhrases) {
+                params.query = searchPhrases[1];
+            } else {
+                // Try to extract query from common patterns
+                const aboutMatch = lastUserMessage.match(/about\s+([^,\s]+(?:\s+[^,\s]+)*)/i);
+                const findMatch = lastUserMessage.match(/find.*documentation.*?([a-zA-Z][^,.\s]+(?:\s+[a-zA-Z][^,.\s]+)*)/i);
+
+                if (aboutMatch) {
+                    params.query = aboutMatch[1].trim();
+                } else if (findMatch) {
+                    params.query = findMatch[1].trim();
+                }
+            }
+        } else {
+            // General search query extraction
+            const searchPhrases = lastUserMessage.match(/"([^"]+)"/);
+            if (searchPhrases) {
+                params.query = searchPhrases[1];
+            }
         }
 
         return params;
@@ -309,6 +472,7 @@ class LLMChatAssistant {
             return response;
         } catch (error) {
             console.error('LLM generation error:', error);
+            console.error('[DEBUG] Tool results for fallback:', JSON.stringify(toolResults, null, 2));
             // Fallback to structured response if LLM fails
             return this.generateStructuredResponse(userMessage, toolResults);
         }
@@ -318,7 +482,7 @@ class LLMChatAssistant {
      * Create system prompt based on available data and context
      */
     createSystemPrompt(toolResults, context) {
-        let prompt = `You are an AI assistant integrated with a unified business management system. You have access to:
+        let prompt = `You are Smartstart Assistant, an AI assistant integrated with a unified business management system. You have access to:
 
 - JIRA (task and issue tracking)
 - Microsoft Outlook (email and calendar)  
@@ -331,7 +495,8 @@ Guidelines:
 - Use the provided data to give specific, actionable insights
 - Format responses with emojis and clear structure
 - If data is missing, explain what you need to help better
-- Always provide context for your recommendations`;
+- Always provide context for your recommendations
+- Introduce yourself as "Smartstart Assistant" when appropriate`;
 
         if (Object.keys(toolResults).length > 0) {
             prompt += "\n\nYou have executed tools and received the following data:\n";
@@ -397,11 +562,19 @@ Guidelines:
 
             switch (toolName) {
                 case 'get_my_tasks':
-                    if (result.success && result.data?.issues) {
-                        response += `📋 **JIRA Tasks** (${result.data.issues.length} found):\n`;
-                        result.data.issues.slice(0, 5).forEach((issue, i) => {
-                            response += `${i + 1}. ${issue.key}: ${issue.fields.summary}\n`;
+                    if (result.success && Array.isArray(result.data) && result.data.length > 0) {
+                        response += `📋 **JIRA Tasks** (${result.data.length} found for ${result.summary?.assignee || 'user'}):\n`;
+                        result.data.slice(0, 5).forEach((issue, i) => {
+                            response += `${i + 1}. **${issue.key}**: ${issue.summary}\n`;
+                            response += `   Status: ${issue.status} | Priority: ${issue.priority}\n`;
                         });
+                        if (result.data.length > 5) {
+                            response += `   ... and ${result.data.length - 5} more tasks\n`;
+                        }
+                    } else if (result.success && Array.isArray(result.data) && result.data.length === 0) {
+                        response += `📋 **JIRA Tasks**: No active tasks found for ${result.summary?.assignee || 'user'}\n`;
+                    } else {
+                        response += `❌ **JIRA Tasks**: Unable to retrieve tasks - ${result.error || 'Unknown error'}\n`;
                     }
                     break;
 
@@ -442,10 +615,23 @@ Guidelines:
      * Generate fallback response for general queries
      */
     generateFallbackResponse(userMessage) {
+        // Handle empty or whitespace-only messages with detailed guidance
+        if (!userMessage || userMessage.trim() === '') {
+            return "Hi! I'm Smartstart Assistant. I can provide:\n" +
+                "� Your daily plan and schedule\n" +
+                "� Task updates and project status\n" +
+                "� Team member information\n" +
+                "� Email summaries and calendar events\n" +
+                "⚡ Urgent items that need attention\n" +
+                "� Quick access to documentation\n\n" +
+                "Just tell me what you need!";
+        }
+
+        // Standard responses for non-empty queries
         const responses = [
-            "I can help you with JIRA tasks, Outlook emails/calendar, team planning, Confluence pages, and priority management. What would you like to know?",
-            "I have access to your JIRA, Outlook, Confluence, and team planning data. How can I assist you today?",
-            "You can ask me about tasks, emails, calendar events, team member workloads, or search for documents. What do you need?"
+            "Hello! I'm Smartstart Assistant. I can help you with JIRA tasks, Outlook emails/calendar, team planning, Confluence pages, and priority management. What would you like to know?",
+            "Hi there! I'm Smartstart Assistant and I have access to your JIRA, Outlook, Confluence, and team planning data. How can I assist you today?",
+            "Welcome! I'm Smartstart Assistant. You can ask me about tasks, emails, calendar events, team member workloads, or search for documents. What do you need?"
         ];
 
         return responses[Math.floor(Math.random() * responses.length)];
@@ -458,7 +644,7 @@ Guidelines:
         return [
             {
                 name: 'chat',
-                description: 'Chat with the AI assistant that can access JIRA, Outlook, Confluence, and team planning data',
+                description: 'Chat with Smartstart Assistant that can access JIRA, Outlook, Confluence, and team planning data',
                 inputSchema: {
                     type: 'object',
                     properties: {

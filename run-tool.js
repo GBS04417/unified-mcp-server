@@ -30,6 +30,7 @@ const { jiraTools } = require('./jira');
 const { confluenceTools } = require('./confluence');
 const { priorityTools } = require('./utils');
 const { TeamPlanningService } = require('./team-planner');
+const PrioritySystemService = require('./priority-system');
 const LLMChatAssistant = require('./chat-assistant');
 
 // Initialize chat assistant
@@ -45,6 +46,23 @@ const teamPlannerService = new TeamPlanningService();
 
 // Initialize JIRA service for team planner
 const { jiraService } = require('./jira');
+const { confluenceService } = require('./confluence');
+const { outlookService } = require('./outlook');
+
+// Initialize priority system service
+const prioritySystemService = new PrioritySystemService();
+
+// Initialize priority system with services
+prioritySystemService.initialize(jiraService, confluenceService, outlookService).catch(console.error);
+
+// Initialize chat assistant with services
+chatAssistant.initialize({
+    jiraService,
+    confluenceService,
+    outlookService,
+    teamPlanningService: teamPlannerService,
+    prioritySystem: prioritySystemService
+}).catch(console.error);
 
 // Create team planner tools array with JIRA integration
 const teamPlannerTools = Object.keys(teamPlannerService.tools).map(toolName => ({

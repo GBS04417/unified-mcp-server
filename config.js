@@ -1,12 +1,12 @@
 /**
- * Unified MCP Server Configuration
+ * SmartStart AI Configuration
  * 
  * Manages configuration for JIRA, Confluence, and Outlook integrations
  */
 
 // Server configuration
-const SERVER_NAME = 'unified-mcp-server';
-const SERVER_VERSION = '1.0.0';
+const SERVER_NAME = 'smartstart-ai';
+const SERVER_VERSION = '2.2.0';
 
 // Service enablement (can be controlled via environment variables)
 const JIRA_ENABLED = process.env.DISABLE_JIRA !== 'true';
