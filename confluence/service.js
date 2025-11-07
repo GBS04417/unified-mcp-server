@@ -423,18 +423,18 @@ class ConfluenceService {
       results: searchResults.results.map(page => ({
         id: page.id,
         title: page.title,
-        space: mockData.confluence.spaces.find(s => s.key === page.spaceKey) || { key: page.spaceKey, name: page.spaceKey },
+        space: mockData.confluence.spaces.find(s => s.key === page.space) || { key: page.space, name: page.space },
         body: {
           view: {
-            value: page.body.storage.value.substring(0, 200) + '...' // Truncated for search results
+            value: (page.content || '').substring(0, 200) + (page.content && page.content.length > 200 ? '...' : '') // Truncated for search results
           }
         },
-        version: page.version,
-        created: page.createdDate,
-        lastModified: page.lastModified,
-        createdBy: page.createdBy,
-        lastModifiedBy: page.lastModifiedBy,
-        webUrl: page.webUrl
+        version: page.version || { number: 1 },
+        created: page.created,
+        lastModified: page.updated,
+        createdBy: page.author,
+        lastModifiedBy: page.author,
+        webUrl: `/display/${page.space}/${page.title.replace(/\s+/g, '+')}`
       }))
     };
   }

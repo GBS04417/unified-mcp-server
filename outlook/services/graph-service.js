@@ -27,6 +27,20 @@ class GraphService {
   }
 
   /**
+   * Extract display name from email address for mock data
+   */
+  extractNameFromEmail(email) {
+    if (!email || typeof email !== 'string') return 'Unknown';
+
+    // Extract name before @ symbol and format it
+    const localPart = email.split('@')[0];
+    return localPart
+      .split('.')
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  }
+
+  /**
    * Make an authenticated request to Microsoft Graph API
    */
   async graphRequest(endpoint, options = {}) {
@@ -247,21 +261,39 @@ class GraphService {
           value: emails.map(email => ({
             id: email.id,
             subject: email.subject,
-            sender: email.sender,
-            from: email.from,
-            toRecipients: email.toRecipients,
-            ccRecipients: email.ccRecipients,
-            receivedDateTime: email.receivedDateTime,
-            sentDateTime: email.sentDateTime,
-            hasAttachments: email.hasAttachments,
-            isRead: email.isRead,
-            importance: email.importance,
-            bodyPreview: email.bodyPreview,
-            body: email.body,
-            parentFolderId: email.parentFolderId,
-            conversationId: email.conversationId,
-            categories: email.categories,
-            attachments: email.attachments
+            // Transform string email to Graph API format
+            from: email.from ? {
+              emailAddress: {
+                name: this.extractNameFromEmail(email.from),
+                address: email.from
+              }
+            } : null,
+            // Transform recipient arrays to Graph API format
+            toRecipients: Array.isArray(email.to) ? email.to.map(addr => ({
+              emailAddress: {
+                name: this.extractNameFromEmail(addr),
+                address: addr
+              }
+            })) : [],
+            ccRecipients: Array.isArray(email.cc) ? email.cc.map(addr => ({
+              emailAddress: {
+                name: this.extractNameFromEmail(addr),
+                address: addr
+              }
+            })) : [],
+            receivedDateTime: email.timestamp || email.receivedDateTime,
+            sentDateTime: email.timestamp || email.sentDateTime,
+            hasAttachments: email.hasAttachments || false,
+            isRead: email.isRead !== undefined ? email.isRead : true,
+            importance: email.importance || 'Normal',
+            bodyPreview: email.body ? email.body.substring(0, 200) : '',
+            body: {
+              contentType: 'HTML',
+              content: email.body || ''
+            },
+            parentFolderId: email.folder || 'Inbox',
+            conversationId: email.conversationId || email.id,
+            categories: email.labels || []
           }))
         };
       }

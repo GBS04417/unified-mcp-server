@@ -318,7 +318,40 @@ const confluenceData = {
             timestamp: "2025-11-04T09:30:00.000Z",
             description: "Updated security procedures with zero-trust implementation guidelines"
         }
-    ]
+    ],
+
+    // Search functionality for mock data
+    searchResults: {
+        byText: function (query, limit = 10) {
+            const allPages = confluenceData.pages;
+            const queryLower = query.toLowerCase();
+
+            // Search through pages by title and content
+            const matchedPages = allPages.filter(page => {
+                const titleMatch = page.title.toLowerCase().includes(queryLower);
+                const contentMatch = page.content && page.content.toLowerCase().includes(queryLower);
+                return titleMatch || contentMatch;
+            });
+
+            // Sort by relevance (title matches first, then content matches)
+            const sortedPages = matchedPages.sort((a, b) => {
+                const aTitleMatch = a.title.toLowerCase().includes(queryLower);
+                const bTitleMatch = b.title.toLowerCase().includes(queryLower);
+                if (aTitleMatch && !bTitleMatch) return -1;
+                if (!aTitleMatch && bTitleMatch) return 1;
+                return 0;
+            });
+
+            const results = sortedPages.slice(0, limit);
+
+            return {
+                size: results.length,
+                start: 0,
+                limit: limit,
+                results: results
+            };
+        }
+    }
 };
 
 module.exports = confluenceData;

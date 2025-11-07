@@ -24,23 +24,76 @@ class EnhancedSmartstartAssistant {
     constructor() {
         this.conversationHistory = [];
 
-        // Load data with proper fallbacks
-        const allEmployees = [
-            ...(Array.isArray(mockData.employees?.leadership) ? mockData.employees.leadership : []),
-            ...(Array.isArray(mockData.employees?.teamMembers) ? mockData.employees.teamMembers : []),
-            ...(Array.isArray(mockData.employees?.adminUsers) ? mockData.employees.adminUsers : [])
-        ];
-        this.employees = allEmployees;
-        this.jiraProjects = Array.isArray(mockData.jira?.projects) ? mockData.jira.projects : [];
-        this.jiraIssues = Array.isArray(mockData.jira?.issues) ? mockData.jira.issues : [];
-        this.confluencePages = Array.isArray(mockData.confluence?.pages) ? mockData.confluence.pages : [];
-        this.outlookEmails = Array.isArray(mockData.outlook?.emails) ? mockData.outlook.emails : [];
+        // Check if we should use test mode (mock data) or live data
+        this.useTestMode = this.shouldUseTestMode();
 
-        // Verify data loaded correctly
-        console.log(`[Enhanced Assistant] Loaded ${this.employees.length} employees, ${this.jiraIssues.length} issues, ${this.jiraProjects.length} projects`);
+        // Load data based on test mode setting
+        if (this.useTestMode) {
+            // Use mock data for testing/demo
+            const allEmployees = [
+                ...(Array.isArray(mockData.employees?.leadership) ? mockData.employees.leadership : []),
+                ...(Array.isArray(mockData.employees?.teamMembers) ? mockData.employees.teamMembers : []),
+                ...(Array.isArray(mockData.employees?.adminUsers) ? mockData.employees.adminUsers : [])
+            ];
+            this.employees = allEmployees;
+            this.jiraProjects = Array.isArray(mockData.jira?.projects) ? mockData.jira.projects : [];
+            this.jiraIssues = Array.isArray(mockData.jira?.issues) ? mockData.jira.issues : [];
+            this.confluencePages = Array.isArray(mockData.confluence?.pages) ? mockData.confluence.pages : [];
+            this.outlookEmails = Array.isArray(mockData.outlook?.emails) ? mockData.outlook.emails : [];
+
+            console.log(`[Enhanced Assistant] Using MOCK data: ${this.employees.length} employees, ${this.jiraIssues.length} issues, ${this.jiraProjects.length} projects`);
+        } else {
+            // Use minimal live data structure - focus on individual user context
+            this.employees = this.createLiveUserProfile();
+            this.jiraProjects = [];
+            this.jiraIssues = [];
+            this.confluencePages = [];
+            this.outlookEmails = [];
+
+            console.log(`[Enhanced Assistant] Using LIVE data mode: Individual user focus for ${USER_CONTEXT.defaultUserName}`);
+        }
 
         // Initialize intent patterns
         this.initializeIntentPatterns();
+    }
+
+    /**
+     * Determine if test mode should be used based on environment variables
+     */
+    shouldUseTestMode() {
+        // Check for global test mode setting
+        const globalTestMode = process.env.USE_TEST_MODE;
+
+        // Check for service-specific test mode (not applicable here but for consistency)
+        const assistantTestMode = process.env.ASSISTANT_USE_TEST_MODE;
+
+        // If service-specific setting exists, use it; otherwise use global setting
+        if (assistantTestMode !== undefined && assistantTestMode !== '') {
+            return assistantTestMode.toLowerCase() === 'true';
+        }
+
+        // Default to global setting, defaulting to true (test mode) if not set
+        return globalTestMode ? globalTestMode.toLowerCase() === 'true' : true;
+    }
+
+    /**
+     * Create a live user profile for the current user
+     */
+    createLiveUserProfile() {
+        return [
+            {
+                employeeId: USER_CONTEXT.defaultUserId,
+                name: USER_CONTEXT.defaultUserName,
+                email: USER_CONTEXT.defaultUserEmail,
+                role: 'Senior Data Engineer',
+                department: 'Data Engineering',
+                location: 'Remote',
+                manager: 'N/A',
+                directReports: [], // Will be populated from live data if needed
+                level: 'Senior',
+                isLiveUser: true // Flag to indicate this is live user data
+            }
+        ];
     }
 
     /**
@@ -82,6 +135,7 @@ class EnhancedSmartstartAssistant {
             ],
             workload_analysis: [
                 // Team workload patterns (HIGH priority)
+                /^team\s+workload\s+analysis$/i,
                 /^(?:workload\s+)?analysis\s+(?:of\s+)?my\s+team\s+members?$/i,
                 /^(?:show\s+me\s+)?(?:the\s+)?workload\s+(?:of\s+)?my\s+team\s+members?$/i,
                 /^my\s+team\s+members?\s+workload$/i,
@@ -89,7 +143,7 @@ class EnhancedSmartstartAssistant {
                 /^(?:team\s+)?workload\s+distribution$/i,
                 /^(?:how\s+is\s+the\s+)?workload\s+(?:distributed\s+)?(?:among\s+)?my\s+team\s+members?$/i,
                 /^(?:show\s+me\s+)?(?:team\s+)?workload\s+balance$/i,
-                /^(?:analyze\s+)?(?:my\s+)?team\s+workload$/i,
+                /^(?:analyze\s+)?(?:my\s+)?team\s+workload(?:\s+analysis)?$/i,
                 // General workload patterns
                 /^workload\s+analysis$/i,
                 /^team\s+productivity$/i,
@@ -175,6 +229,16 @@ class EnhancedSmartstartAssistant {
                 /^tasks?$/i,
                 /^team\s+tasks?$/i  // Make this more specific to avoid conflicts
             ],
+            team_schedule: [
+                // Team member schedule patterns (HIGH priority - must come before team_structure)
+                /^(?:give\s+me\s+)?my\s+team\s+members?\s+schedule$/i,
+                /^(?:show\s+me\s+)?(?:the\s+)?schedule\s+(?:of\s+)?my\s+team\s+members?$/i,
+                /^my\s+team\s+members?\s+calendar$/i,
+                /^(?:what\s+(?:is|are)\s+)?my\s+team\s+members?\s+(?:schedule|meetings?|appointments?)$/i,
+                /^(?:team\s+)?schedule\s+(?:for\s+)?my\s+team\s+members?$/i,
+                /^upcoming\s+(?:events?|meetings?)\s+(?:for\s+)?my\s+team\s+members?$/i,
+                /^(?:show\s+me\s+)?(?:my\s+)?team\s+(?:member\s+)?schedule$/i
+            ],
             team_structure: [
                 // "My" team patterns (HIGHEST priority - most specific)
                 /^my\s+team\s+members?$/i,
@@ -235,6 +299,18 @@ class EnhancedSmartstartAssistant {
                 /who\s+leads?\s+the\s+([a-zA-Z\s]+)/i
             ],
             calendar_availability: [
+                // "My" calendar patterns (HIGHEST priority - most specific)
+                /^my\s+calendar$/i,
+                /^give\s+me\s+my\s+calendar$/i,
+                /^show\s+me\s+my\s+calendar$/i,
+                /^my\s+calendar\s+events?$/i,
+                /^my\s+schedule$/i,
+                /^my\s+meetings?$/i,
+                /^my\s+appointments?$/i,
+                /^what\s+(?:is|are)\s+my\s+(?:schedule|meetings?|appointments?|events?)$/i,
+                /^upcoming\s+(?:events?|meetings?)\s+for\s+me$/i,
+                /^my\s+upcoming\s+(?:events?|meetings?)$/i,
+                // User-specific calendar patterns
                 /is\s+([a-zA-Z\s\.]+)\s+available/i,
                 /([a-zA-Z\s\.]+)\s+calendar/i,
                 /schedule\s+for\s+([a-zA-Z\s\.]+)/i,
@@ -342,7 +418,8 @@ class EnhancedSmartstartAssistant {
                         // Handle "my" queries - replace with user context
                         if (isMyQuery && (messageLower.includes('my') || messageLower.includes(' me'))) {
                             if (intentType.includes('task') || intentType.includes('project') ||
-                                intentType.includes('employee') || intentType.includes('team')) {
+                                intentType.includes('employee') || intentType.includes('team') ||
+                                intentType.includes('calendar')) {
                                 analysis.entities.names.push(USER_CONTEXT.defaultUserName);
                                 patternEntityExtracted = true;
                                 // Mark as user context query for later handling
@@ -448,7 +525,7 @@ class EnhancedSmartstartAssistant {
                 return this.handleUserProjects(analysis);
 
             case 'task_lookup':
-                return this.handleTaskLookup(analysis);
+                return await this.handleTaskLookup(analysis);
 
             case 'project_status':
                 return this.handleProjectStatus(analysis);
@@ -461,6 +538,9 @@ class EnhancedSmartstartAssistant {
 
             case 'calendar_availability':
                 return this.handleCalendarAvailability(analysis);
+
+            case 'team_schedule':
+                return this.handleTeamSchedule(analysis);
 
             case 'urgent_tasks':
                 return this.handleUrgentTasks(analysis);
@@ -570,7 +650,7 @@ class EnhancedSmartstartAssistant {
     /**
      * Handle task lookup with user filtering
      */
-    handleTaskLookup(analysis) {
+    async handleTaskLookup(analysis) {
         const queryLower = analysis.originalQuery.toLowerCase();
 
         // Check for team member task queries
@@ -578,7 +658,7 @@ class EnhancedSmartstartAssistant {
             queryLower.includes('tasks assigned to my team') ||
             queryLower.includes('my team tasks') ||
             queryLower.includes('team member tasks')) {
-            return this.handleTeamMemberTasks();
+            return await this.handleTeamMemberTasks();
         }
 
         // Check for general task listing requests (no specific user)
@@ -590,7 +670,7 @@ class EnhancedSmartstartAssistant {
             queryLower === 'list all tasks' ||
             queryLower === 'show all tasks' ||
             (queryLower.includes('all') && queryLower.includes('task'))) {
-            return this.formatAllTasks();
+            return await this.formatAllTasks();
         }
 
         // Handle "my" queries with user context
@@ -600,7 +680,7 @@ class EnhancedSmartstartAssistant {
                 name: USER_CONTEXT.defaultUserName,
                 email: USER_CONTEXT.defaultUserEmail
             };
-            return this.formatUserTasks(userEmployee);
+            return await this.formatUserTasks(userEmployee);
         }
 
         if (analysis.entities.names.length === 0) {
@@ -621,7 +701,7 @@ class EnhancedSmartstartAssistant {
             return `I couldn't find an employee named "${searchName}". Please check the name and try again.`;
         }
 
-        return this.formatUserTasks(employee);
+        return await this.formatUserTasks(employee);
     }
 
     /**
@@ -847,8 +927,18 @@ class EnhancedSmartstartAssistant {
      * Handle calendar availability queries
      */
     handleCalendarAvailability(analysis) {
+        // Handle "my" queries with user context
+        if (analysis.isUserContextQuery) {
+            const userEmployee = {
+                employeeId: USER_CONTEXT.defaultUserId,
+                name: USER_CONTEXT.defaultUserName,
+                email: USER_CONTEXT.defaultUserEmail
+            };
+            return this.formatUserCalendar(userEmployee);
+        }
+
         if (analysis.entities.names.length === 0) {
-            return "I can help check availability! Please specify whose calendar you'd like to check.";
+            return "I can help check availability! Please specify whose calendar you'd like to check, or ask for 'my calendar'.";
         }
 
         const searchName = analysis.entities.names[0];
@@ -858,15 +948,22 @@ class EnhancedSmartstartAssistant {
             return `I couldn't find an employee named "${searchName}".`;
         }
 
+        return this.formatUserCalendar(employee);
+    }
+
+    /**
+     * Format calendar events for a user
+     */
+    formatUserCalendar(employee) {
         // Get calendar events for this employee
         const calendarEvents = this.getCalendarEventsForEmployee(employee);
         const taskCount = this.getTaskCount(employee);
 
         let response = `📅 **Calendar for ${employee.name}**\n\n`;
         response += `👤 **Employee Info:**\n`;
-        response += `   💼 Role: ${employee.role}\n`;
-        response += `   🏢 Department: ${employee.department}\n`;
-        response += `   📍 Location: ${employee.location}\n`;
+        response += `   💼 Role: ${employee.role || 'Team Lead'}\n`;
+        response += `   🏢 Department: ${employee.department || 'Data Engineering Department'}\n`;
+        response += `   📍 Location: ${employee.location || 'Remote'}\n`;
         response += `   ✅ Current Tasks: ${taskCount} active assignments\n\n`;
 
         if (calendarEvents.length > 0) {
@@ -894,6 +991,121 @@ class EnhancedSmartstartAssistant {
         response += `   • Check their current tasks: "Show me ${employee.name} tasks"\n`;
         response += `   • View team information: "Who reports to ${employee.name}"\n`;
         response += `   • Contact info: ${employee.email}`;
+
+        return response;
+    }
+
+    /**
+     * Handle team schedule queries - show calendar for all team members
+     */
+    handleTeamSchedule(analysis) {
+        // Get the current user's team members
+        const userEmployee = {
+            employeeId: USER_CONTEXT.defaultUserId,
+            name: USER_CONTEXT.defaultUserName,
+            email: USER_CONTEXT.defaultUserEmail
+        };
+
+        // Find the user in the employee list to get their direct reports
+        const manager = this.employees.find(emp =>
+            emp.employeeId === USER_CONTEXT.defaultUserId ||
+            emp.name.toLowerCase() === USER_CONTEXT.defaultUserName.toLowerCase()
+        );
+
+        if (!manager || !manager.directReports || manager.directReports.length === 0) {
+            return `📅 **Team Member Schedules**\n\n` +
+                `You don't appear to have any direct team members assigned, or team structure data is not available.\n\n` +
+                `💡 **Alternative Options:**\n` +
+                `• "My calendar" - Show your calendar\n` +
+                `• "All employees" - Show company directory\n` +
+                `• "Team structure" - View organizational structure`;
+        }
+
+        // Get team members
+        const teamMembers = this.employees.filter(emp =>
+            manager.directReports.includes(emp.employeeId)
+        );
+
+        if (teamMembers.length === 0) {
+            return `📅 **Team Member Schedules**\n\n` +
+                `No team members found in the employee directory.\n\n` +
+                `💡 **Tip:** Try "My team members" to see your team structure.`;
+        }
+
+        // Get schedule for each team member
+        let response = `📅 **Team Members Schedule** (${teamMembers.length} team members):\n\n`;
+        let totalEvents = 0;
+
+        teamMembers.forEach((member, index) => {
+            const calendarEvents = this.getCalendarEventsForEmployee(member);
+            const taskCount = this.getTaskCount(member);
+
+            response += `**${index + 1}. ${member.name}** (${member.role || 'Team Member'})\n`;
+            response += `   📍 Location: ${member.location || 'Remote'}\n`;
+            response += `   ✅ Active Tasks: ${taskCount}\n`;
+
+            if (calendarEvents.length > 0) {
+                totalEvents += calendarEvents.length;
+                response += `   📅 Upcoming Events: ${calendarEvents.length}\n\n`;
+
+                // Show up to 3 upcoming events per team member
+                const upcomingEvents = calendarEvents.slice(0, 3);
+                upcomingEvents.forEach((event, eventIndex) => {
+                    const startDate = new Date(event.start.dateTime);
+                    const dateStr = startDate.toLocaleDateString();
+                    const startTime = startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const endTime = new Date(event.end.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                    response += `      ${eventIndex + 1}. **${event.subject}**\n`;
+                    response += `         🗓️ ${dateStr} | ⏰ ${startTime} - ${endTime}\n`;
+                    if (event.location?.displayName) {
+                        response += `         📍 ${event.location.displayName}\n`;
+                    }
+                });
+
+                if (calendarEvents.length > 3) {
+                    response += `      ... and ${calendarEvents.length - 3} more events\n`;
+                }
+                response += '\n';
+            } else {
+                response += `   📅 No upcoming events scheduled\n\n`;
+            }
+        });
+
+        // Team schedule summary
+        response += `📊 **Team Schedule Summary:**\n`;
+        response += `• Total Team Members: ${teamMembers.length}\n`;
+        response += `• Total Upcoming Events: ${totalEvents}\n`;
+
+        const busyMembers = teamMembers.filter(member =>
+            this.getCalendarEventsForEmployee(member).length > 0
+        ).length;
+        const availableMembers = teamMembers.length - busyMembers;
+
+        response += `• Members with Events: ${busyMembers}\n`;
+        response += `• Available Members: ${availableMembers}\n\n`;
+
+        // Recommendations
+        response += `💡 **Team Availability Insights:**\n`;
+
+        if (availableMembers > busyMembers) {
+            response += `• Most team members appear available for new meetings\n`;
+        } else if (busyMembers > availableMembers) {
+            response += `• Team has a busy schedule - consider workload balance\n`;
+        } else {
+            response += `• Team schedule appears well-balanced\n`;
+        }
+
+        if (totalEvents === 0) {
+            response += `• Great opportunity to schedule team meetings or collaborative work\n`;
+        } else if (totalEvents > teamMembers.length * 2) {
+            response += `• Heavy meeting schedule - consider consolidating or rescheduling if needed\n`;
+        }
+
+        response += `\n💡 **Quick Actions:**\n`;
+        response += `• "Workload analysis of my team members" - View task distribution\n`;
+        response += `• "My team members" - See team structure\n`;
+        response += `• "[Name] calendar" - View individual schedules`;
 
         return response;
     }
@@ -1296,7 +1508,19 @@ class EnhancedSmartstartAssistant {
      * Handle workload analysis for team members
      */
     handleTeamWorkloadAnalysis() {
-        // Get the current user's team members
+        // Check if we're in live data mode
+        if (!this.useTestMode) {
+            return `📊 **Team Workload Analysis - Live Data Mode**\n\n` +
+                `⚠️ **Team structure not available in live data mode.**\n\n` +
+                `For live data environments, try:\n` +
+                `• "My tasks" - Your personal workload\n` +
+                `• Individual queries: "Show me [Name] tasks"\n` +
+                `• Project-based analysis: Use JIRA project tools\n\n` +
+                `💡 **Note**: Team structure requires configuration in mock data mode.\n` +
+                `Set USE_TEST_MODE=true in .env for team hierarchy features.`;
+        }
+
+        // Get the current user's team members (mock data mode)
         const userEmployee = {
             employeeId: USER_CONTEXT.defaultUserId,
             name: USER_CONTEXT.defaultUserName,
@@ -1860,14 +2084,26 @@ class EnhancedSmartstartAssistant {
     /**
      * Format user tasks
      */
-    formatUserTasks(employee) {
-        // Find tasks by employee ID (JIRA tasks use employeeId as assignee)
-        const userTasks = this.jiraIssues.filter(task =>
-            task.assignee === employee.employeeId ||
-            task.assignee === employee.name ||
-            (task.assignee && task.assignee.toLowerCase().includes(employee.name.toLowerCase())) ||
-            (employee.name && employee.name.toLowerCase().includes(task.assignee.toLowerCase()))
-        );
+    async formatUserTasks(employee) {
+        let userTasks;
+
+        if (this.useTestMode) {
+            // Use mock data
+            userTasks = this.jiraIssues.filter(task =>
+                task.assignee === employee.employeeId ||
+                task.assignee === employee.name ||
+                (task.assignee && task.assignee.toLowerCase().includes(employee.name.toLowerCase())) ||
+                (employee.name && employee.name.toLowerCase().includes(task.assignee.toLowerCase()))
+            );
+        } else {
+            // Fetch live JIRA data
+            try {
+                userTasks = await this.fetchLiveUserTasks(employee.employeeId);
+            } catch (error) {
+                console.error('Error fetching live tasks:', error);
+                return `❌ **Error fetching tasks for ${employee.name}**: ${error.message}`;
+            }
+        }
 
         if (userTasks.length === 0) {
             return `📋 **${employee.name}** currently has no assigned JIRA tasks.`;
@@ -1876,9 +2112,9 @@ class EnhancedSmartstartAssistant {
         let response = `📋 **Tasks for ${employee.name}** (${userTasks.length} total):\n\n`;
 
         userTasks.slice(0, 5).forEach((task, index) => {
-            response += `${index + 1}. **${task.key}**: ${task.summary}\n`;
+            response += `${index + 1}. **${task.key || task.summary}**: ${task.summary}\n`;
             response += `   📊 Status: ${task.status} | 🔥 Priority: ${task.priority}\n`;
-            response += `   📁 Project: ${task.project}\n\n`;
+            response += `   📁 Project: ${task.project || 'Unknown'}\n\n`;
         });
 
         if (userTasks.length > 5) {
@@ -1886,7 +2122,9 @@ class EnhancedSmartstartAssistant {
         }
 
         // Add workload assessment
-        const highPriorityCount = userTasks.filter(t => t.priority === 'High' || t.priority === 'Critical').length;
+        const highPriorityCount = userTasks.filter(t =>
+            t.priority === 'High' || t.priority === 'Critical' || t.priority === 'Highest'
+        ).length;
         if (highPriorityCount > 0) {
             response += `⚠️ **${highPriorityCount}** high-priority tasks require attention.`;
         } else {
@@ -1894,6 +2132,36 @@ class EnhancedSmartstartAssistant {
         }
 
         return response;
+    }
+
+    /**
+     * Fetch live JIRA tasks for a user
+     */
+    async fetchLiveUserTasks(assignee) {
+        const { JiraService } = require('../jira/service');
+        const jiraService = new JiraService();
+
+        try {
+            console.log(`[Live Data] Fetching tasks for assignee: ${assignee}`);
+            const result = await jiraService.handleFetchByAssignee(assignee, null, 50);
+
+            // Parse the MCP content format
+            let parsedData = {};
+            if (result.content && result.content[0] && result.content[0].text) {
+                parsedData = JSON.parse(result.content[0].text);
+            }
+
+            console.log(`[Live Data] JIRA result:`, {
+                total: parsedData.total,
+                returnedCount: parsedData.returnedCount,
+                issuesLength: parsedData.issues?.length || 0
+            });
+
+            return parsedData.issues || [];
+        } catch (error) {
+            console.error('Live JIRA fetch error:', error);
+            return [];
+        }
     }
 
     /**

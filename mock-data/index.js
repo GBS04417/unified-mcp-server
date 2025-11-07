@@ -12,7 +12,8 @@ const mockData = {
     },
     confluence: {
         pages: confluencePagesData.pages || [],
-        spaces: confluencePagesData.spaces || []
+        spaces: confluencePagesData.spaces || [],
+        searchResults: confluencePagesData.searchResults
     },
     outlook: {
         emails: outlookEmailsData.emails || []
