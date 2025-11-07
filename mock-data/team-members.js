@@ -6,14 +6,14 @@
 const teamMembersAndAdmins = {
     // Team Members (60 total - EMP031 to EMP090)
     teamMembers: [
-        // Under Abrar ul haq N (EMP014) - 4 members
+        // Under Abrar ul haq N (GBS04417) - 4 members
         {
             employeeId: "EMP031",
             name: "Priya Sharma",
             email: "priya.sharma@company.com",
             role: "TEAM_MEMBER",
             department: "Data Engineering",
-            reportsTo: "EMP014",
+            reportsTo: "GBS04417",
             directReports: [],
             projectIds: ["PORTAEH", "DATA-PIPELINE-V2"],
             skillSet: ["Python", "Apache Airflow", "ETL", "Data Processing"],
@@ -27,7 +27,7 @@ const teamMembersAndAdmins = {
             email: "raj.patel@company.com",
             role: "TEAM_MEMBER",
             department: "Data Engineering",
-            reportsTo: "EMP014",
+            reportsTo: "GBS04417",
             directReports: [],
             projectIds: ["ETL-OPTIMIZATION", "DATA-VALIDATION"],
             skillSet: ["Scala", "Apache Spark", "Kafka", "Data Streaming"],
@@ -41,7 +41,7 @@ const teamMembersAndAdmins = {
             email: "alex.thompson@company.com",
             role: "TEAM_MEMBER",
             department: "Data Engineering",
-            reportsTo: "EMP014",
+            reportsTo: "GBS04417",
             directReports: [],
             projectIds: ["PORTAEH", "REAL-TIME-ANALYTICS"],
             skillSet: ["Java", "Spring Boot", "Microservices", "Database Design"],
@@ -55,7 +55,7 @@ const teamMembersAndAdmins = {
             email: "emma.rodriguez@company.com",
             role: "TEAM_MEMBER",
             department: "Data Engineering",
-            reportsTo: "EMP014",
+            reportsTo: "GBS04417",
             directReports: [],
             projectIds: ["DATA-PIPELINE-V2", "MONITORING-AUTOMATION"],
             skillSet: ["Python", "Docker", "Kubernetes", "CI/CD"],

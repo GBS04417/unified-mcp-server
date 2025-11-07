@@ -16,11 +16,11 @@ const confluenceData = {
         },
         {
             key: "DATAMGMT",
-            name: "Data Management",
+            title: "Data Management Team",
             description: "Data architecture, ETL processes, and data governance",
             owner: "EMP003", // Lisa Chen - BU Manager
             type: "team",
-            permissions: ["EMP003", "EMP006", "EMP007", "EMP008", "EMP014", "EMP015", "EMP016", "EMP017", "EMP018", "EMP019", "EMP020"]
+            permissions: ["EMP003", "EMP006", "EMP007", "EMP008", "GBS04417", "EMP015", "EMP016", "EMP017", "EMP018", "EMP019", "EMP020"]
         },
         {
             key: "ARCH",
@@ -44,7 +44,7 @@ const confluenceData = {
             description: "Project-specific documentation for PORTAEH initiative",
             owner: "EMP006", // Robert Wilson - PM
             type: "project",
-            permissions: ["EMP006", "EMP014", "EMP021", "EMP031", "EMP032", "EMP033", "EMP034"]
+            permissions: ["EMP006", "GBS04417", "EMP021", "EMP031", "EMP032", "EMP033", "EMP034"]
         },
         {
             key: "CCACB",
@@ -86,10 +86,10 @@ const confluenceData = {
 
         // Data Management Documentation
         {
-            id: "data-001",
+            id: "17006594",
             title: "ETL Pipeline Architecture and Best Practices",
             space: "DATAMGMT",
-            author: "EMP014", // Abrar ul haq N
+            author: "GBS04417", // Abrar ul haq N
             created: "2024-10-01T00:00:00.000Z",
             updated: "2025-11-04T00:00:00.000Z",
             content: "Comprehensive guide to ETL pipeline design, implementation patterns, error handling strategies, performance optimization techniques, and monitoring best practices. Includes PORTAEH project case studies and lessons learned.",
@@ -119,7 +119,7 @@ const confluenceData = {
             content: "Data quality assessment methodologies, automated validation rules, data profiling techniques, and quality monitoring dashboard specifications. Includes integration with existing ETL processes.",
             labels: ["data-quality", "monitoring", "validation", "profiling"],
             permissions: "team",
-            collaborators: ["EMP014", "EMP039", "EMP040", "EMP041"]
+            collaborators: ["GBS04417", "EMP039", "EMP040", "EMP041"]
         },
         {
             id: "data-004",
@@ -221,7 +221,7 @@ const confluenceData = {
             content: "Technical specifications for the PORTAEH project including system requirements, integration points, data flow diagrams, API specifications, and testing strategies. Current status and progress updates.",
             labels: ["portaeh", "specifications", "integration", "api", "progress"],
             permissions: "project",
-            collaborators: ["EMP014", "EMP021", "EMP031", "EMP032"]
+            collaborators: ["GBS04417", "EMP021", "EMP031", "EMP032"]
         },
         {
             id: "portaeh-002",
@@ -293,7 +293,7 @@ const confluenceData = {
         {
             type: "page_updated",
             pageId: "data-001",
-            user: "EMP014", // Abrar ul haq N
+            user: "GBS04417", // Abrar ul haq N
             timestamp: "2025-11-04T16:45:00.000Z",
             description: "Added ETL error handling section and PORTAEH lessons learned"
         },

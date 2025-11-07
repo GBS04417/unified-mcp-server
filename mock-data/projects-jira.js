@@ -24,7 +24,7 @@ const projectsAndJiraData = {
             description: "Enterprise data integration and ETL optimization project",
             department: "Data Management",
             lead: "EMP006", // Robert Wilson - PM
-            members: ["EMP006", "EMP014", "EMP031", "EMP032", "EMP033", "EMP034"],
+            members: ["EMP006", "GBS04417", "EMP031", "EMP032", "EMP033", "EMP034"],
             status: "In Progress",
             priority: "High",
             startDate: "2024-10-01T00:00:00.000Z",
@@ -136,7 +136,7 @@ const projectsAndJiraData = {
         {
             key: "PORTAEH-3231", // Existing from mock data
             summary: "ETL Source Unavailable Alert",
-            assignee: "EMP014", // Abrar ul haq N
+            assignee: "GBS04417", // Abrar ul haq N
             reporter: "EMP089", // System Admin
             project: "PORTAEH",
             issueType: "Bug",
@@ -151,7 +151,7 @@ const projectsAndJiraData = {
             key: "PORTAEH-3340",
             summary: "Data Pipeline Performance Optimization",
             assignee: "EMP031", // Priya Sharma
-            reporter: "EMP014", // Abrar ul haq N
+            reporter: "GBS04417", // Abrar ul haq N
             project: "PORTAEH",
             issueType: "Task",
             status: "Task Assigned",
@@ -347,7 +347,7 @@ const projectsAndJiraData = {
         "EMP013": { totalTasks: 3, inProgress: 2, assigned: 1, completed: 0 }, // Security PM
 
         // Team Leads (4-5 technical tasks)
-        "EMP014": { totalTasks: 5, inProgress: 2, assigned: 3, completed: 0 }, // Abrar - ETL Lead
+        "GBS04417": { totalTasks: 5, inProgress: 2, assigned: 3, completed: 0 }, // Abrar - ETL Lead
         "EMP015": { totalTasks: 5, inProgress: 1, assigned: 4, completed: 0 }, // Dinesh - DB Lead  
         "EMP016": { totalTasks: 4, inProgress: 2, assigned: 2, completed: 0 }, // Mani - DQ Lead
         "EMP021": { totalTasks: 5, inProgress: 2, assigned: 3, completed: 0 }, // Dev Sparrow - Integration Lead

@@ -9,9 +9,16 @@
  * - Advanced intent classification with entity extraction
  * - Edge case handling with query disambiguation
  * - Natural language processing for all communication styles
+ * - User context support for "my" queries
  */
 
+// Load environment variables if not already loaded
+if (!process.env.JIRA_USERNAME) {
+    require('dotenv').config();
+}
+
 const mockData = require('../mock-data');
+const { USER_CONTEXT } = require('../config.js');
 
 class EnhancedSmartstartAssistant {
     constructor() {
@@ -55,6 +62,41 @@ class EnhancedSmartstartAssistant {
                 /urgent/i,
                 /priority/i
             ],
+            overdue_tasks: [
+                // Team member overdue patterns (HIGH priority)
+                /^(?:list\s+of\s+)?overdue\s+tasks?\s+(?:of\s+)?my\s+team\s+members?$/i,
+                /^(?:show\s+me\s+)?(?:the\s+)?overdue\s+tasks?\s+(?:of\s+)?my\s+team\s+members?$/i,
+                /^my\s+team\s+members?\s+overdue\s+tasks?$/i,
+                /^overdue\s+tasks?\s+(?:of\s+)?my\s+team\s+members?$/i,
+                /^(?:what\s+are\s+the\s+)?overdue\s+tasks?\s+(?:assigned\s+to\s+)?my\s+team\s+members?$/i,
+                // General overdue patterns
+                /^overdue\s+tasks?$/i,
+                /^list\s+overdue\s+tasks?$/i,
+                /^show\s+overdue\s+tasks?$/i,
+                /^tasks?\s+that\s+are\s+overdue$/i,
+                /^late\s+tasks?$/i,
+                /^missed\s+deadlines?$/i,
+                /overdue/i,
+                /past\s+due/i,
+                /late\s+tasks?/i
+            ],
+            workload_analysis: [
+                // Team workload patterns (HIGH priority)
+                /^(?:workload\s+)?analysis\s+(?:of\s+)?my\s+team\s+members?$/i,
+                /^(?:show\s+me\s+)?(?:the\s+)?workload\s+(?:of\s+)?my\s+team\s+members?$/i,
+                /^my\s+team\s+members?\s+workload$/i,
+                /^workload\s+(?:of\s+)?my\s+team\s+members?$/i,
+                /^(?:team\s+)?workload\s+distribution$/i,
+                /^(?:how\s+is\s+the\s+)?workload\s+(?:distributed\s+)?(?:among\s+)?my\s+team\s+members?$/i,
+                /^(?:show\s+me\s+)?(?:team\s+)?workload\s+balance$/i,
+                /^(?:analyze\s+)?(?:my\s+)?team\s+workload$/i,
+                // General workload patterns
+                /^workload\s+analysis$/i,
+                /^team\s+productivity$/i,
+                /^task\s+distribution$/i,
+                /workload/i,
+                /task\s+distribution/i
+            ],
             employee_listing: [
                 /^all\s+employees?$/i,
                 /^list\s+all\s+employees?$/i,
@@ -70,6 +112,15 @@ class EnhancedSmartstartAssistant {
                 /^staff\s+directory$/i
             ],
             user_projects: [
+                // "My" project patterns (HIGHEST priority - most specific)
+                /^my\s+projects?$/i,
+                /^what\s+are\s+my\s+projects?$/i,
+                /^show\s+me\s+my\s+projects?$/i,
+                /^list\s+my\s+projects?$/i,
+                /^get\s+my\s+projects?$/i,
+                /^my\s+current\s+projects?$/i,
+                /^what\s+projects?\s+am\s+i\s+working\s+on$/i,
+                /^which\s+projects?\s+am\s+i\s+on$/i,
                 // Project-specific queries (most specific - must come first)
                 /what\s+(?:are\s+the\s+)?project\s+names?\s+([a-zA-Z\s\.]+)\s+(?:working\s+on|works?\s+on)/i,
                 /what\s+(?:are\s+the\s+)?projects?\s+(?:names?\s+)?(?:is\s+)?([a-zA-Z\s\.]+)\s+(?:working\s+on|works?\s+on)/i,
@@ -79,6 +130,25 @@ class EnhancedSmartstartAssistant {
                 /show\s+(?:me\s+)?([a-zA-Z\s\.]+)\s+projects?/i
             ],
             task_lookup: [
+                // "My" task patterns (HIGHEST priority - most specific)
+                /^my\s+tasks?$/i,
+                /^what\s+are\s+my\s+tasks?$/i,
+                /^show\s+me\s+my\s+tasks?$/i,
+                /^list\s+my\s+tasks?$/i,
+                /^get\s+my\s+tasks?$/i,
+                /^my\s+current\s+tasks?$/i,
+                /^my\s+jira\s+tasks?$/i,
+                /^my\s+jira\s+issues?$/i,
+                /^what\s+am\s+i\s+working\s+on$/i,
+                /^my\s+work$/i,
+                /^my\s+assignments?$/i,
+                /^my\s+current\s+work$/i,
+                // Team member task patterns (HIGH priority - team task queries)
+                /^(?:what\s+is\s+the\s+)?status\s+of\s+(?:the\s+)?tasks?\s+assigned\s+to\s+my\s+team\s+members?$/i,
+                /^(?:what\s+are\s+the\s+)?tasks?\s+assigned\s+to\s+my\s+team\s+members?$/i,
+                /^(?:show\s+me\s+)?(?:the\s+)?tasks?\s+(?:of\s+)?my\s+team\s+members?$/i,
+                /^my\s+team\s+members?\s+tasks?$/i,
+                /^tasks?\s+(?:of\s+)?my\s+team\s+members?$/i,
                 // User-specific task patterns (MUST come first - more specific)
                 /show\s+me\s+([a-zA-Z\s\.]+)\s+tasks?/i,
                 /list\s+([a-zA-Z\s\.]+)\s+tasks?/i,
@@ -103,9 +173,18 @@ class EnhancedSmartstartAssistant {
                 /^show\s+tasks?$/i,
                 /^list\s+tasks?$/i,
                 /^tasks?$/i,
-                /team\s+tasks?/i
+                /^team\s+tasks?$/i  // Make this more specific to avoid conflicts
             ],
             team_structure: [
+                // "My" team patterns (HIGHEST priority - most specific)
+                /^my\s+team\s+members?$/i,
+                /^who\s+reports?\s+to\s+me\??$/i,
+                /^my\s+direct\s+reports?$/i,
+                /^who\s+are\s+my\s+team\s+members?$/i,
+                /^show\s+me\s+my\s+team$/i,
+                /^list\s+my\s+team\s+members?$/i,
+                /^my\s+team$/i,
+                // User-specific team patterns (must come after "my" patterns)
                 /who\s+(?:are\s+)?(?:all\s+)?reports?\s+to\s+([a-zA-Z\s\.]+)/i,
                 /who\s+(?:are\s+)?(?:all\s+)?reporting\s+to\s+([a-zA-Z\s\.]+)/i,
                 /who\s+are\s+the\s+direct\s+reports?\s+of\s+([a-zA-Z\s\.]+)/i,
@@ -147,25 +226,6 @@ class EnhancedSmartstartAssistant {
                 /who\s+is\s+working\s+on\s+([A-Z][A-Z0-9]+)/i,
                 /all\s+projects?/i,
                 /show\s+me\s+all\s+projects?/i
-            ],
-            team_structure: [
-                /who\s+(?:are\s+)?(?:all\s+)?reports?\s+to\s+([a-zA-Z\s\.]+)/i,
-                /who\s+(?:are\s+)?(?:all\s+)?reporting\s+to\s+([a-zA-Z\s\.]+)/i,
-                /who\s+are\s+the\s+direct\s+reports?\s+of\s+([a-zA-Z\s\.]+)/i,
-                /direct\s+reports?\s+(?:of|for)\s+([a-zA-Z\s\.]+)/i,
-                /show\s+me\s+team\s+members?\s+under\s+([a-zA-Z\s\.]+)/i,
-                /list\s+people\s+reporting\s+to\s+([a-zA-Z\s\.]+)/i,
-                /team\s+members?\s+under\s+([a-zA-Z\s\.]+)/i,
-                /([a-zA-Z\s\.]+)\s+direct\s+reports?/i,
-                /([a-zA-Z\s\.]+)\s+team\s+members?/i,
-                /([a-zA-Z\s\.]+)\s+manager/i,
-                /manager\s+of\s+([a-zA-Z\s\.]+)/i,
-                /department\s+structure/i,
-                /engineering\s+department/i,
-                /team\s+composition/i,
-                /who\s+is\s+in\s+the\s+([a-zA-Z\s\.]+)\s+team/i,
-                /how\s+many\s+people\s+report\s+to\s+([a-zA-Z\s]+)/i,
-                /organizational\s+chart/i
             ],
             department_head: [
                 /who\s+is\s+the\s+([a-zA-Z\s]+)\s+manager/i,
@@ -271,8 +331,26 @@ class EnhancedSmartstartAssistant {
                         analysis.primaryIntent = intentType;
                         analysis.confidence = 0.9;
 
+                        // Check if this is a "my" query (contains "my" or "i" and no specific entity captured)
+                        const queryLower = message.toLowerCase();
+                        const isMyQuery = (queryLower.includes(' my ') || queryLower.startsWith('my ') ||
+                            queryLower.includes(' i ') || queryLower.includes('what am i') ||
+                            queryLower.includes(' me') || queryLower.includes('to me')) &&
+                            (!match[1] || match[1].trim() === '' || match[1].toLowerCase().includes('my') ||
+                                match[1].toLowerCase() === 'me');
+
+                        // Handle "my" queries - replace with user context
+                        if (isMyQuery && (messageLower.includes('my') || messageLower.includes(' me'))) {
+                            if (intentType.includes('task') || intentType.includes('project') ||
+                                intentType.includes('employee') || intentType.includes('team')) {
+                                analysis.entities.names.push(USER_CONTEXT.defaultUserName);
+                                patternEntityExtracted = true;
+                                // Mark as user context query for later handling
+                                analysis.isUserContextQuery = true;
+                            }
+                        }
                         // Extract specific entity from pattern match
-                        if (match[1] && match[1].trim()) {
+                        else if (match[1] && match[1].trim()) {
                             const entityName = match[1].trim();
                             if (intentType.includes('employee') || intentType.includes('task') || intentType.includes('team')) {
                                 analysis.entities.names.push(entityName);
@@ -387,6 +465,12 @@ class EnhancedSmartstartAssistant {
             case 'urgent_tasks':
                 return this.handleUrgentTasks(analysis);
 
+            case 'overdue_tasks':
+                return this.handleOverdueTasks(analysis);
+
+            case 'workload_analysis':
+                return this.handleWorkloadAnalysis(analysis);
+
             case 'greeting':
                 return this.handleGreeting();
 
@@ -489,6 +573,14 @@ class EnhancedSmartstartAssistant {
     handleTaskLookup(analysis) {
         const queryLower = analysis.originalQuery.toLowerCase();
 
+        // Check for team member task queries
+        if (queryLower.includes('my team members') ||
+            queryLower.includes('tasks assigned to my team') ||
+            queryLower.includes('my team tasks') ||
+            queryLower.includes('team member tasks')) {
+            return this.handleTeamMemberTasks();
+        }
+
         // Check for general task listing requests (no specific user)
         if (queryLower === 'jira tasks' ||
             queryLower === 'all tasks' ||
@@ -501,9 +593,20 @@ class EnhancedSmartstartAssistant {
             return this.formatAllTasks();
         }
 
+        // Handle "my" queries with user context
+        if (analysis.isUserContextQuery) {
+            const userEmployee = {
+                employeeId: USER_CONTEXT.defaultUserId,
+                name: USER_CONTEXT.defaultUserName,
+                email: USER_CONTEXT.defaultUserEmail
+            };
+            return this.formatUserTasks(userEmployee);
+        }
+
         if (analysis.entities.names.length === 0) {
             // Suggest task listing if no specific user mentioned
             return `📋 **Task Options:**\n\n` +
+                `• "My tasks" - Show your JIRA tasks\n` +
                 `• "JIRA tasks" - Show all JIRA tasks\n` +
                 `• "All tasks" - Complete task overview\n` +
                 `• "[Name] tasks" - Show specific person's tasks\n` +
@@ -525,8 +628,18 @@ class EnhancedSmartstartAssistant {
      * Handle user projects queries - show project names for a specific user
      */
     handleUserProjects(analysis) {
+        // Handle "my" queries with user context
+        if (analysis.isUserContextQuery) {
+            const userEmployee = {
+                employeeId: USER_CONTEXT.defaultUserId,
+                name: USER_CONTEXT.defaultUserName,
+                email: USER_CONTEXT.defaultUserEmail
+            };
+            return this.formatUserProjects(userEmployee);
+        }
+
         if (analysis.entities.names.length === 0) {
-            return "I'd be happy to show project information! Please specify whose projects you'd like to see.";
+            return "I'd be happy to show project information! Please specify whose projects you'd like to see, or ask for 'my projects'.";
         }
 
         const searchName = analysis.entities.names[0];
@@ -567,6 +680,23 @@ class EnhancedSmartstartAssistant {
      * Handle team structure queries
      */
     handleTeamStructure(analysis) {
+        // Handle "my" queries with user context
+        if (analysis.isUserContextQuery) {
+            const userEmployee = {
+                employeeId: USER_CONTEXT.defaultUserId,
+                name: USER_CONTEXT.defaultUserName,
+                email: USER_CONTEXT.defaultUserEmail
+            };
+
+            // Check if asking about reports/team
+            if (analysis.originalQuery.toLowerCase().includes('report') ||
+                analysis.originalQuery.toLowerCase().includes('team')) {
+                return this.formatDirectReports(USER_CONTEXT.defaultUserName);
+            }
+
+            return this.formatTeamInfo(USER_CONTEXT.defaultUserName);
+        }
+
         if (analysis.entities.names.length === 0) {
             if (analysis.originalQuery.toLowerCase().includes('department') ||
                 analysis.originalQuery.toLowerCase().includes('organization')) {
@@ -588,6 +718,110 @@ class EnhancedSmartstartAssistant {
         }
 
         return this.formatTeamInfo(searchName);
+    }
+
+    /**
+     * Handle team member task queries - show tasks for all team members
+     */
+    handleTeamMemberTasks() {
+        // Get the current user's team members
+        const userEmployee = {
+            employeeId: USER_CONTEXT.defaultUserId,
+            name: USER_CONTEXT.defaultUserName,
+            email: USER_CONTEXT.defaultUserEmail
+        };
+
+        // Find the user in the employee list to get their direct reports
+        const manager = this.employees.find(emp =>
+            emp.employeeId === USER_CONTEXT.defaultUserId ||
+            emp.name.toLowerCase() === USER_CONTEXT.defaultUserName.toLowerCase()
+        );
+
+        if (!manager || !manager.directReports || manager.directReports.length === 0) {
+            return `👥 **Team Member Tasks**\n\n` +
+                `You don't appear to have any direct team members assigned, or team structure data is not available.\n\n` +
+                `💡 **Alternative Options:**\n` +
+                `• "My tasks" - Show your assigned tasks\n` +
+                `• "All tasks" - Show all project tasks\n` +
+                `• "Urgent tasks" - Show high priority items`;
+        }
+
+        // Get team members
+        const teamMembers = this.employees.filter(emp =>
+            manager.directReports.includes(emp.employeeId)
+        );
+
+        if (teamMembers.length === 0) {
+            return `👥 **Team Member Tasks**\n\n` +
+                `No team members found in the employee directory.\n\n` +
+                `💡 **Tip:** Try "My team members" to see your team structure.`;
+        }
+
+        // Get tasks for each team member
+        let response = `👥 **Tasks Assigned to Team Members** (${teamMembers.length} team members):\n\n`;
+
+        let totalTasks = 0;
+        let statusSummary = {
+            'Open': 0,
+            'In Progress': 0,
+            'Task In Progress': 0,
+            'Task Assigned': 0,
+            'Done': 0,
+            'Resolved': 0
+        };
+
+        teamMembers.forEach(member => {
+            const memberTasks = this.jiraIssues.filter(task =>
+                task.assignee.toLowerCase().includes(member.name.toLowerCase()) ||
+                member.name.toLowerCase().includes(task.assignee.toLowerCase()) ||
+                task.assignee === member.employeeId
+            );
+
+            response += `**${member.name}** (${member.role || 'Team Member'}):\n`;
+
+            if (memberTasks.length === 0) {
+                response += `   📝 No assigned tasks\n\n`;
+            } else {
+                totalTasks += memberTasks.length;
+
+                memberTasks.forEach(task => {
+                    const priorityIcon = this.getPriorityIcon(task.priority);
+                    const statusIcon = this.getStatusIcon(task.status);
+
+                    response += `   ${statusIcon} **${task.key}**: ${task.summary}\n`;
+                    response += `      📊 Status: ${task.status} | ${priorityIcon} Priority: ${task.priority}\n`;
+
+                    // Update status summary
+                    if (statusSummary.hasOwnProperty(task.status)) {
+                        statusSummary[task.status]++;
+                    }
+                });
+                response += '\n';
+            }
+        });
+
+        // Add summary
+        response += `📊 **Summary:**\n`;
+        response += `• Total Tasks: ${totalTasks}\n`;
+
+        Object.entries(statusSummary).forEach(([status, count]) => {
+            if (count > 0) {
+                response += `• ${status}: ${count} tasks\n`;
+            }
+        });
+
+        if (totalTasks > 0) {
+            const completedTasks = statusSummary['Done'] + statusSummary['Resolved'];
+            const inProgressTasks = statusSummary['In Progress'] + statusSummary['Task In Progress'];
+            const openTasks = statusSummary['Open'] + statusSummary['Task Assigned'];
+
+            response += `\n💡 **Team Status:**\n`;
+            if (openTasks > 0) response += `• ${openTasks} tasks ready to start\n`;
+            if (inProgressTasks > 0) response += `• ${inProgressTasks} tasks in progress\n`;
+            if (completedTasks > 0) response += `• ${completedTasks} tasks completed\n`;
+        }
+
+        return response;
     }
 
     /**
@@ -861,6 +1095,416 @@ class EnhancedSmartstartAssistant {
 
         response += `💡 **Recommendation:** Focus on Critical items first, then High priority tasks.`;
         return response;
+    }
+
+    /**
+     * Handle overdue tasks queries
+     */
+    handleOverdueTasks(analysis) {
+        const queryLower = analysis.originalQuery.toLowerCase();
+
+        // Check for team member overdue tasks queries
+        if (queryLower.includes('my team members') ||
+            queryLower.includes('overdue tasks of my team') ||
+            queryLower.includes('my team overdue') ||
+            queryLower.includes('team members overdue')) {
+            return this.handleTeamMemberOverdueTasks();
+        }
+
+        // General overdue tasks
+        return this.handleGeneralOverdueTasks();
+    }
+
+    /**
+     * Handle overdue tasks for team members
+     */
+    handleTeamMemberOverdueTasks() {
+        // Get the current user's team members
+        const userEmployee = {
+            employeeId: USER_CONTEXT.defaultUserId,
+            name: USER_CONTEXT.defaultUserName,
+            email: USER_CONTEXT.defaultUserEmail
+        };
+
+        // Find the user in the employee list to get their direct reports
+        const manager = this.employees.find(emp =>
+            emp.employeeId === USER_CONTEXT.defaultUserId ||
+            emp.name.toLowerCase() === USER_CONTEXT.defaultUserName.toLowerCase()
+        );
+
+        if (!manager || !manager.directReports || manager.directReports.length === 0) {
+            return `📅 **Team Member Overdue Tasks**\n\n` +
+                `You don't appear to have any direct team members assigned, or team structure data is not available.\n\n` +
+                `💡 **Alternative Options:**\n` +
+                `• "Overdue tasks" - Show all overdue items\n` +
+                `• "My tasks" - Show your assigned tasks\n` +
+                `• "Urgent tasks" - Show high priority items`;
+        }
+
+        // Get team members
+        const teamMembers = this.employees.filter(emp =>
+            manager.directReports.includes(emp.employeeId)
+        );
+
+        if (teamMembers.length === 0) {
+            return `📅 **Team Member Overdue Tasks**\n\n` +
+                `No team members found in the employee directory.\n\n` +
+                `💡 **Tip:** Try "My team members" to see your team structure.`;
+        }
+
+        // Get overdue tasks for each team member
+        let response = `📅 **Overdue Tasks - Team Members** (${teamMembers.length} team members):\n\n`;
+        let totalOverdue = 0;
+
+        teamMembers.forEach(member => {
+            const memberTasks = this.jiraIssues.filter(task =>
+                (task.assignee.toLowerCase().includes(member.name.toLowerCase()) ||
+                    member.name.toLowerCase().includes(task.assignee.toLowerCase()) ||
+                    task.assignee === member.employeeId) &&
+                this.isTaskOverdue(task)
+            );
+
+            response += `**${member.name}** (${member.role || 'Team Member'}):\n`;
+
+            if (memberTasks.length === 0) {
+                response += `   ✅ No overdue tasks\n\n`;
+            } else {
+                totalOverdue += memberTasks.length;
+
+                memberTasks.forEach(task => {
+                    const priorityIcon = this.getPriorityIcon(task.priority);
+                    const daysOverdue = this.getDaysOverdue(task);
+
+                    response += `   ⚠️ **${task.key}**: ${task.summary}\n`;
+                    response += `      📊 Status: ${task.status} | ${priorityIcon} Priority: ${task.priority}\n`;
+                    response += `      📅 Overdue by: ${daysOverdue} days\n`;
+                });
+                response += '\n';
+            }
+        });
+
+        // Add summary
+        if (totalOverdue === 0) {
+            response += `🎉 **Excellent!** No overdue tasks found for your team members.\n\n`;
+            response += `💡 **Keep it up!** Your team is staying on top of their deadlines.`;
+        } else {
+            response += `📊 **Summary:**\n`;
+            response += `• Total Overdue Tasks: ${totalOverdue}\n`;
+            response += `• Team Members Affected: ${teamMembers.filter(member =>
+                this.jiraIssues.some(task =>
+                    (task.assignee.toLowerCase().includes(member.name.toLowerCase()) ||
+                        member.name.toLowerCase().includes(task.assignee.toLowerCase()) ||
+                        task.assignee === member.employeeId) &&
+                    this.isTaskOverdue(task)
+                )
+            ).length}\n\n`;
+
+            response += `💡 **Recommendation:**\n`;
+            response += `• Focus on highest priority overdue items first\n`;
+            response += `• Consider reassigning tasks if workload is unbalanced\n`;
+            response += `• Schedule team check-in to address blockers`;
+        }
+
+        return response;
+    }
+
+    /**
+     * Handle general overdue tasks (all tasks, not team-specific)
+     */
+    handleGeneralOverdueTasks() {
+        const overdueTasks = this.jiraIssues.filter(task => this.isTaskOverdue(task));
+
+        if (overdueTasks.length === 0) {
+            return `🎉 **Great news!** No overdue tasks found in the system.\n\n` +
+                `✅ All tasks are either completed or within their deadlines.\n\n` +
+                `💡 **Keep up the good work!**`;
+        }
+
+        let response = `📅 **Overdue Tasks** (${overdueTasks.length} total):\n\n`;
+
+        overdueTasks.slice(0, 10).forEach((task, index) => {
+            const priorityIcon = this.getPriorityIcon(task.priority);
+            const statusIcon = this.getStatusIcon(task.status);
+            const daysOverdue = this.getDaysOverdue(task);
+
+            response += `${index + 1}. ${statusIcon} **${task.key}**: ${task.summary}\n`;
+            response += `   📊 Status: ${task.status} | ${priorityIcon} Priority: ${task.priority}\n`;
+            response += `   👤 Assignee: ${task.assignee}\n`;
+            response += `   📅 Overdue by: ${daysOverdue} days\n\n`;
+        });
+
+        if (overdueTasks.length > 10) {
+            response += `... and ${overdueTasks.length - 10} more overdue tasks.\n\n`;
+        }
+
+        response += `💡 **Recommendation:** Address Critical and High priority overdue tasks immediately.`;
+        return response;
+    }
+
+    /**
+     * Check if a task is overdue (simplified - assumes due date exists)
+     */
+    isTaskOverdue(task) {
+        // For demo purposes, let's assume some tasks are overdue based on status and created date
+        // In a real system, you'd check against actual due dates
+        if (!task.created) return false;
+
+        const createdDate = new Date(task.created);
+        const currentDate = new Date();
+        const daysSinceCreated = Math.floor((currentDate - createdDate) / (1000 * 60 * 60 * 24));
+
+        // Consider a task overdue if it's been open for more than 14 days and not completed
+        const isOldTask = daysSinceCreated > 14;
+        const isNotCompleted = !['Done', 'Resolved', 'Closed'].includes(task.status);
+
+        return isOldTask && isNotCompleted;
+    }
+
+    /**
+     * Calculate days overdue for a task
+     */
+    getDaysOverdue(task) {
+        if (!task.created) return 0;
+
+        const createdDate = new Date(task.created);
+        const currentDate = new Date();
+        const daysSinceCreated = Math.floor((currentDate - createdDate) / (1000 * 60 * 60 * 24));
+
+        // For demo purposes, assume 14 days is the expected completion time
+        return Math.max(0, daysSinceCreated - 14);
+    }
+
+    /**
+     * Handle workload analysis queries
+     */
+    handleWorkloadAnalysis(analysis) {
+        const queryLower = analysis.originalQuery.toLowerCase();
+
+        // Check for team member workload analysis queries
+        if (queryLower.includes('my team members') ||
+            queryLower.includes('my team') ||
+            queryLower.includes('team workload') ||
+            queryLower.includes('workload of my team')) {
+            return this.handleTeamWorkloadAnalysis();
+        }
+
+        // General workload analysis
+        return this.handleGeneralWorkloadAnalysis();
+    }
+
+    /**
+     * Handle workload analysis for team members
+     */
+    handleTeamWorkloadAnalysis() {
+        // Get the current user's team members
+        const userEmployee = {
+            employeeId: USER_CONTEXT.defaultUserId,
+            name: USER_CONTEXT.defaultUserName,
+            email: USER_CONTEXT.defaultUserEmail
+        };
+
+        // Find the user in the employee list to get their direct reports
+        const manager = this.employees.find(emp =>
+            emp.employeeId === USER_CONTEXT.defaultUserId ||
+            emp.name.toLowerCase() === USER_CONTEXT.defaultUserName.toLowerCase()
+        );
+
+        if (!manager || !manager.directReports || manager.directReports.length === 0) {
+            return `📊 **Team Workload Analysis**\n\n` +
+                `You don't appear to have any direct team members assigned, or team structure data is not available.\n\n` +
+                `💡 **Alternative Options:**\n` +
+                `• "Workload analysis" - Show general workload overview\n` +
+                `• "My tasks" - Show your assigned tasks\n` +
+                `• "All tasks" - Show all project tasks`;
+        }
+
+        // Get team members
+        const teamMembers = this.employees.filter(emp =>
+            manager.directReports.includes(emp.employeeId)
+        );
+
+        if (teamMembers.length === 0) {
+            return `📊 **Team Workload Analysis**\n\n` +
+                `No team members found in the employee directory.\n\n` +
+                `💡 **Tip:** Try "My team members" to see your team structure.`;
+        }
+
+        // Analyze workload for each team member
+        let response = `📊 **Team Workload Analysis** (${teamMembers.length} team members):\n\n`;
+        let totalTasks = 0;
+        let workloadData = [];
+
+        teamMembers.forEach(member => {
+            const memberTasks = this.jiraIssues.filter(task =>
+                task.assignee.toLowerCase().includes(member.name.toLowerCase()) ||
+                member.name.toLowerCase().includes(task.assignee.toLowerCase()) ||
+                task.assignee === member.employeeId
+            );
+
+            const tasksByStatus = {
+                'Open': memberTasks.filter(t => t.status === 'Open').length,
+                'In Progress': memberTasks.filter(t => t.status === 'In Progress' || t.status === 'Task In Progress').length,
+                'Assigned': memberTasks.filter(t => t.status === 'Task Assigned').length,
+                'Completed': memberTasks.filter(t => ['Done', 'Resolved', 'Closed'].includes(t.status)).length
+            };
+
+            const tasksByPriority = {
+                'Critical': memberTasks.filter(t => t.priority === 'Critical').length,
+                'High': memberTasks.filter(t => t.priority === 'High' || t.priority === 'Highest').length,
+                'Medium': memberTasks.filter(t => t.priority === 'Medium' || t.priority === 'Normal').length,
+                'Low': memberTasks.filter(t => t.priority === 'Low').length
+            };
+
+            const activeTasks = tasksByStatus['Open'] + tasksByStatus['In Progress'] + tasksByStatus['Assigned'];
+            const overdueTasks = memberTasks.filter(task => this.isTaskOverdue(task)).length;
+
+            workloadData.push({
+                member,
+                totalTasks: memberTasks.length,
+                activeTasks,
+                completedTasks: tasksByStatus['Completed'],
+                overdueTasks,
+                tasksByStatus,
+                tasksByPriority,
+                workloadScore: this.calculateWorkloadScore(memberTasks)
+            });
+
+            totalTasks += memberTasks.length;
+        });
+
+        // Sort by workload score (highest first)
+        workloadData.sort((a, b) => b.workloadScore - a.workloadScore);
+
+        // Display individual workload analysis
+        workloadData.forEach((data, index) => {
+            const { member, totalTasks, activeTasks, completedTasks, overdueTasks, tasksByPriority, workloadScore } = data;
+            const workloadLevel = this.getWorkloadLevel(workloadScore);
+            const workloadIcon = this.getWorkloadIcon(workloadScore);
+
+            response += `**${member.name}** (${member.role || 'Team Member'}) ${workloadIcon}\n`;
+            response += `   📋 Total Tasks: ${totalTasks} | 🔄 Active: ${activeTasks} | ✅ Completed: ${completedTasks}\n`;
+
+            if (overdueTasks > 0) {
+                response += `   ⚠️ Overdue: ${overdueTasks} tasks\n`;
+            }
+
+            response += `   🎯 Workload Level: ${workloadLevel} (Score: ${workloadScore})\n`;
+
+            // Priority breakdown if has tasks
+            if (totalTasks > 0) {
+                const priorityBreakdown = [];
+                if (tasksByPriority['Critical'] > 0) priorityBreakdown.push(`🔥 ${tasksByPriority['Critical']} Critical`);
+                if (tasksByPriority['High'] > 0) priorityBreakdown.push(`⚡ ${tasksByPriority['High']} High`);
+                if (tasksByPriority['Medium'] > 0) priorityBreakdown.push(`📋 ${tasksByPriority['Medium']} Medium`);
+                if (tasksByPriority['Low'] > 0) priorityBreakdown.push(`📝 ${tasksByPriority['Low']} Low`);
+
+                if (priorityBreakdown.length > 0) {
+                    response += `   📊 Priority: ${priorityBreakdown.join(', ')}\n`;
+                }
+            }
+
+            response += '\n';
+        });
+
+        // Team summary and insights
+        const averageWorkload = workloadData.reduce((sum, data) => sum + data.workloadScore, 0) / workloadData.length;
+        const highWorkloadMembers = workloadData.filter(data => data.workloadScore > 75).length;
+        const lowWorkloadMembers = workloadData.filter(data => data.workloadScore < 25).length;
+        const totalOverdue = workloadData.reduce((sum, data) => sum + data.overdueTasks, 0);
+
+        response += `📈 **Team Summary:**\n`;
+        response += `• Total Tasks: ${totalTasks}\n`;
+        response += `• Average Workload Score: ${Math.round(averageWorkload)}\n`;
+        response += `• Team Members: ${teamMembers.length}\n`;
+
+        if (highWorkloadMembers > 0) response += `• High Workload: ${highWorkloadMembers} members\n`;
+        if (lowWorkloadMembers > 0) response += `• Low Workload: ${lowWorkloadMembers} members\n`;
+        if (totalOverdue > 0) response += `• Total Overdue: ${totalOverdue} tasks\n`;
+
+        // Recommendations
+        response += `\n💡 **Recommendations:**\n`;
+
+        if (highWorkloadMembers > 0 && lowWorkloadMembers > 0) {
+            response += `• Consider redistributing tasks from high-workload to low-workload team members\n`;
+        } else if (highWorkloadMembers > 0) {
+            response += `• Review high-workload members for potential support or deadline adjustments\n`;
+        } else if (lowWorkloadMembers > 0) {
+            response += `• Consider assigning additional tasks to team members with lower workloads\n`;
+        }
+
+        if (totalOverdue > 0) {
+            response += `• Address ${totalOverdue} overdue tasks as priority\n`;
+        }
+
+        if (averageWorkload > 80) {
+            response += `• Team workload is high - consider additional resources or timeline adjustments\n`;
+        } else if (averageWorkload < 40) {
+            response += `• Team has capacity for additional work\n`;
+        } else {
+            response += `• Team workload appears well-balanced\n`;
+        }
+
+        return response;
+    }
+
+    /**
+     * Handle general workload analysis (all employees, not team-specific)
+     */
+    handleGeneralWorkloadAnalysis() {
+        return `📊 **General Workload Analysis**\n\n` +
+            `This feature shows overall system workload. For detailed team analysis, try:\n\n` +
+            `• "Workload analysis of my team members"\n` +
+            `• "My team workload"\n` +
+            `• "Team workload distribution"`;
+    }
+
+    /**
+     * Calculate workload score for a set of tasks (0-100)
+     */
+    calculateWorkloadScore(tasks) {
+        if (tasks.length === 0) return 0;
+
+        let score = 0;
+
+        // Base score from number of active tasks
+        const activeTasks = tasks.filter(t => !['Done', 'Resolved', 'Closed'].includes(t.status));
+        score += Math.min(activeTasks.length * 10, 50); // Max 50 points for task count
+
+        // Priority weighting
+        tasks.forEach(task => {
+            if (task.priority === 'Critical') score += 15;
+            else if (task.priority === 'High' || task.priority === 'Highest') score += 10;
+            else if (task.priority === 'Medium' || task.priority === 'Normal') score += 5;
+            else if (task.priority === 'Low') score += 2;
+        });
+
+        // Overdue penalty
+        const overdueTasks = tasks.filter(task => this.isTaskOverdue(task));
+        score += overdueTasks.length * 20; // Heavy penalty for overdue
+
+        return Math.min(score, 100); // Cap at 100
+    }
+
+    /**
+     * Get workload level description
+     */
+    getWorkloadLevel(score) {
+        if (score >= 80) return 'Very High';
+        if (score >= 60) return 'High';
+        if (score >= 40) return 'Moderate';
+        if (score >= 20) return 'Light';
+        return 'Very Light';
+    }
+
+    /**
+     * Get workload icon based on score
+     */
+    getWorkloadIcon(score) {
+        if (score >= 80) return '🔴'; // Very High
+        if (score >= 60) return '🟠'; // High
+        if (score >= 40) return '🟡'; // Moderate
+        if (score >= 20) return '🟢'; // Light
+        return '⚪'; // Very Light
     }
 
     /**
@@ -1641,6 +2285,31 @@ class EnhancedSmartstartAssistant {
             task.assignee.toLowerCase().includes(employee.name.toLowerCase()) ||
             employee.name.toLowerCase().includes(task.assignee.toLowerCase())
         ).length;
+    }
+
+    /**
+     * Get priority icon for task priority
+     */
+    getPriorityIcon(priority) {
+        const priorityLower = priority.toLowerCase();
+        if (priorityLower.includes('highest') || priorityLower.includes('critical')) return '🔥';
+        if (priorityLower.includes('high')) return '⚡';
+        if (priorityLower.includes('medium') || priorityLower.includes('normal')) return '📋';
+        if (priorityLower.includes('low')) return '📝';
+        return '📋';
+    }
+
+    /**
+     * Get status icon for task status
+     */
+    getStatusIcon(status) {
+        const statusLower = status.toLowerCase();
+        if (statusLower.includes('done') || statusLower.includes('resolved') || statusLower.includes('closed')) return '✅';
+        if (statusLower.includes('progress') || statusLower.includes('active')) return '🔄';
+        if (statusLower.includes('open') || statusLower.includes('assigned') || statusLower.includes('todo')) return '📝';
+        if (statusLower.includes('blocked') || statusLower.includes('waiting')) return '⏸️';
+        if (statusLower.includes('review') || statusLower.includes('testing')) return '👀';
+        return '📝';
     }
 }
 

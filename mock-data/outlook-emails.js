@@ -83,7 +83,7 @@ const outlookEmailData = {
         // Technical Team Communications
         {
             id: "email-005",
-            from: "abrar.haq@company.com", // EMP014 - ETL Team Lead
+            from: "abrar.haq@company.com", // GBS04417 - ETL Team Lead
             to: ["priya.sharma@company.com", "raj.patel@company.com", "arjun.singh@company.com", "neha.gupta@company.com"],
             cc: ["robert.wilson@company.com"],
             subject: "ETL Pipeline Enhancement - Performance Optimization Results",
@@ -175,7 +175,7 @@ const outlookEmailData = {
     meetingPatterns: {
         // Daily standup meetings
         dailyStandups: [
-            { team: "ETL Team", time: "09:00", attendees: ["EMP014", "EMP031", "EMP032", "EMP033", "EMP034"] },
+            { team: "ETL Team", time: "09:00", attendees: ["GBS04417", "EMP031", "EMP032", "EMP033", "EMP034"] },
             { team: "Database Team", time: "09:30", attendees: ["EMP015", "EMP035", "EMP036", "EMP037", "EMP038"] },
             { team: "Integration Team", time: "10:00", attendees: ["EMP021", "EMP055", "EMP056", "EMP057", "EMP058"] },
             { team: "Data Quality Team", time: "10:30", attendees: ["EMP016", "EMP039", "EMP040", "EMP041", "EMP042"] }
@@ -183,7 +183,7 @@ const outlookEmailData = {
         // Weekly team meetings  
         weeklyMeetings: [
             { meeting: "Leadership Sync", day: "Monday", time: "14:00", attendees: ["EMP001", "EMP002", "EMP003", "EMP004", "EMP005"] },
-            { meeting: "PORTAEH Project Review", day: "Tuesday", time: "11:00", attendees: ["EMP006", "EMP014", "EMP021", "EMP031", "EMP032"] },
+            { meeting: "PORTAEH Project Review", day: "Tuesday", time: "11:00", attendees: ["EMP006", "GBS04417", "EMP021", "EMP031", "EMP032"] },
             { meeting: "CCACB Technical Review", day: "Wednesday", time: "14:00", attendees: ["EMP007", "EMP015", "EMP035", "EMP037", "EMP038"] },
             { meeting: "Architecture Planning", day: "Thursday", time: "15:00", attendees: ["EMP002", "EMP009", "EMP021", "EMP022", "EMP024"] }
         ],

@@ -244,17 +244,17 @@ class JiraService {
 
         const issues = mockResults.issues.map(issue => ({
           key: issue.key,
-          summary: issue.fields.summary || 'No summary',
-          status: issue.fields.status?.name || 'Unknown',
-          priority: issue.fields.priority?.name || 'Unknown',
-          assignee: issue.fields.assignee?.displayName || 'Unassigned',
-          reporter: issue.fields.reporter?.displayName || 'Unknown',
-          created: issue.fields.created || null,
-          updated: issue.fields.updated || null,
-          dueDate: issue.fields.duedate || null,
-          issueType: issue.fields.issuetype?.name || 'Unknown',
-          project: issue.fields.project?.name || 'Unknown',
-          labels: issue.fields.labels || [],
+          summary: issue.fields.summary || issue.summary || 'No summary',
+          status: issue.fields.status?.name || issue.fields.status || issue.status || 'Unknown',
+          priority: issue.fields.priority?.name || issue.fields.priority || issue.priority || 'Unknown',
+          assignee: issue.fields.assignee?.displayName || issue.fields.assignee || issue.assignee || 'Unassigned',
+          reporter: issue.fields.reporter?.displayName || issue.fields.reporter || issue.reporter || 'Unknown',
+          created: issue.fields.created || issue.created || null,
+          updated: issue.fields.updated || issue.updated || null,
+          dueDate: issue.fields.duedate || issue.fields.dueDate || issue.dueDate || null,
+          issueType: issue.fields.issuetype?.name || issue.fields.issueType || issue.issueType || 'Unknown',
+          project: issue.fields.project?.name || issue.fields.project || issue.project || 'Unknown',
+          labels: issue.fields.labels || issue.labels || [],
           webUrl: `${this.baseUrl || 'https://mock.jira.com'}/browse/${issue.key}`,
         }));
 
@@ -678,9 +678,17 @@ class JiraService {
       const assigneeMatch = jql.match(/assignee\s*=\s*"([^"]+)"/);
       if (assigneeMatch) {
         const assigneeName = assigneeMatch[1];
-        filtered = filtered.filter(issue =>
-          issue.assignee && issue.assignee.displayName.includes(assigneeName)
-        );
+        filtered = filtered.filter(issue => {
+          if (!issue.assignee) return false;
+
+          // Handle both string assignee (EMP014) and object assignee ({displayName: "..."})
+          if (typeof issue.assignee === 'string') {
+            return issue.assignee === assigneeName || issue.assignee.includes(assigneeName);
+          } else if (issue.assignee.displayName) {
+            return issue.assignee.displayName.includes(assigneeName);
+          }
+          return false;
+        });
       }
     }
 
@@ -696,9 +704,13 @@ class JiraService {
       const statusMatch = jql.match(/status\s+IN\s*\(([^)]+)\)/);
       if (statusMatch) {
         const statuses = statusMatch[1].split(',').map(s => s.trim().replace(/["']/g, ''));
-        filtered = filtered.filter(issue =>
-          statuses.some(status => issue.status.name.includes(status))
-        );
+        filtered = filtered.filter(issue => {
+          if (!issue.status) return false;
+
+          // Handle both string status and object status
+          const statusValue = typeof issue.status === 'string' ? issue.status : issue.status.name;
+          return statuses.some(status => statusValue && statusValue.includes(status));
+        });
       }
     }
 

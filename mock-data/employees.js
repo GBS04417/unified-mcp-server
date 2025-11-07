@@ -100,7 +100,7 @@ const organizationData = {
             role: "PROJECT_MANAGER",
             department: "Data Management",
             reportsTo: "EMP003",
-            directReports: ["EMP014", "EMP015", "EMP016"],
+            directReports: ["GBS04417", "EMP015", "EMP016"],
             projectIds: ["PORTAEH", "DATA-PIPELINE-V2"],
             skillSet: ["Project Management", "Agile", "Data Projects", "Stakeholder Management"],
             location: "Austin, TX",
@@ -213,7 +213,7 @@ const organizationData = {
         // Team Leads (15 total, 2-3 per PM)
         // Under Robert Wilson (EMP006) - Data Management
         {
-            employeeId: "EMP014",
+            employeeId: "GBS04417",
             name: "Abrar ul haq N", // Existing from mock data
             email: "abrar.ulhaq@company.com",
             role: "TEAM_LEAD",
@@ -472,7 +472,7 @@ const organizationData = {
         "CTO": ["EMP002"],
         "BU_MANAGER": ["EMP003", "EMP004", "EMP005"],
         "PROJECT_MANAGER": ["EMP006", "EMP007", "EMP008", "EMP009", "EMP010", "EMP011", "EMP012", "EMP013"],
-        "TEAM_LEAD": ["EMP014", "EMP015", "EMP016", "EMP017", "EMP018", "EMP019", "EMP020", "EMP021", "EMP022", "EMP023", "EMP024", "EMP025", "EMP026", "EMP027", "EMP028", "EMP029", "EMP030"],
+        "TEAM_LEAD": ["GBS04417", "EMP015", "EMP016", "EMP017", "EMP018", "EMP019", "EMP020", "EMP021", "EMP022", "EMP023", "EMP024", "EMP025", "EMP026", "EMP027", "EMP028", "EMP029", "EMP030"],
         "TEAM_MEMBER": [], // Will be populated with EMP031-EMP090
         "ADMIN": [] // Will be populated with admin users
     },
@@ -488,7 +488,7 @@ const organizationData = {
             head: "EMP002"
         },
         "Data Management": {
-            employees: ["EMP003", "EMP006", "EMP007", "EMP008", "EMP014", "EMP015", "EMP016", "EMP017", "EMP018", "EMP019", "EMP020"],
+            employees: ["EMP003", "EMP006", "EMP007", "EMP008", "GBS04417", "EMP015", "EMP016", "EMP017", "EMP018", "EMP019", "EMP020"],
             head: "EMP003"
         },
         "IT Architecture": {

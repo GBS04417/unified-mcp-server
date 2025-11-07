@@ -31,6 +31,13 @@ const OUTLOOK_USE_TEST_MODE = process.env.OUTLOOK_USE_TEST_MODE !== undefined
   ? process.env.OUTLOOK_USE_TEST_MODE === 'true'
   : USE_TEST_MODE;
 
+// User Context Configuration
+const USER_CONTEXT = {
+  defaultUserId: process.env.DEFAULT_USER_ID || process.env.JIRA_USERNAME || 'unknown',
+  defaultUserName: process.env.DEFAULT_USER_NAME || 'Default User',
+  defaultUserEmail: process.env.DEFAULT_USER_EMAIL || 'user@company.com'
+};
+
 // JIRA Configuration
 const JIRA_CONFIG = {
   baseUrl: process.env.JIRA_URL || 'https://your-domain.atlassian.net',
@@ -195,6 +202,7 @@ module.exports = {
   JIRA_USE_TEST_MODE,
   CONFLUENCE_USE_TEST_MODE,
   OUTLOOK_USE_TEST_MODE,
+  USER_CONTEXT,
   JIRA_CONFIG,
   CONFLUENCE_CONFIG,
   OUTLOOK_CONFIG,
